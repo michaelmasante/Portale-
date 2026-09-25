@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Ricerca Fattibilità Motori</title>
+
+	<!-- Disattiva errore favicon -->
+	<link rel="icon" href="data:,">
+
+	<!-- Tabulator CSS LOCALE -->
+	<link href="CSS/Motori/tabulator.min.css" rel="stylesheet">
+	<!-- CSS Personalizzato Motori -->
+	<link rel="stylesheet" href="CSS/Motori/Motori.css">
+
+	<!-- XLSX Library (SheetJS via cdnjs) -->
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+	<!-- Tabulator JS LOCALE -->
+	<script src="JS/Motori/tabulator.min.js"></script>
+</head>
+<body>
+
+	<!-- Header condivisibile -->
+	<div id="header-placeholder"></div>
+
+	<main class="container">
+		<h1>Ricerca Fattibilità Motori</h1>
+
+		<!-- Contenitore Filtri Rapidi -->
+		<div class="filters-container">
+			<!-- Filtro Globale -->
+			<input type="text" id="global-search" placeholder="🔍 Cerca su tutte le colonne...">
+
+			<!-- Dropdown Multi-Select Customer -->
+			<div class="multiselect-container" id="customer-multiselect">
+				<button type="button" class="multiselect-btn" id="customer-dropdown-btn">
+					<span id="customer-btn-text">Tutti i Customer</span>
+					<span class="dropdown-arrow">▼</span>
+				</button>
+				<div class="multiselect-dropdown" id="customer-dropdown-menu">
+					<!-- Ricerca rapida cliente -->
+					<div class="multiselect-search">
+						<input type="text" id="customer-search-input" placeholder="Cerca cliente...">
+					</div>
+					<!-- Azioni rapide -->
+					<div class="multiselect-actions">
+						<button type="button" id="customer-select-all">Seleziona tutti</button>
+						<button type="button" id="customer-clear-all">Azzera</button>
+					</div>
+					<!-- Le opzioni a spunta verranno generate dinamicamente da JS -->
+					<div class="multiselect-options" id="customer-options-list"></div>
+				</div>
+			</div>
+		</div>
+
+		<!-- Barra delle Schede (Tab per ogni foglio Excel) -->
+		<div id="tabs-container" class="tabs-container"></div>
+
+		<!-- Contenitore per le griglie Tabulator -->
+		<div id="grids-wrapper"></div>
+	</main>
+	<div id="footer-placeholder"></div>
+	<!-- Script caricatore Header -->
+	<script src="JS/Portal/header-loader.js"></script>
+	<!-- Script Gestione Tabella Motori -->
+	<script src="JS/Motori/Motori.js"></script>
+</body>
+</html>
