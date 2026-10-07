@@ -1,5 +1,4 @@
-﻿
-body {
+﻿body {
     margin: 0;
 }
 
@@ -194,6 +193,79 @@ body {
     font-size: 13px;
 }
 
+/* Riga Certificati cliccabile per aprire il dettaglio TAG */
+.tabulator-row {
+    cursor: pointer;
+}
+
+.cert-expand-icon {
+    display: inline-block;
+    color: #888888;
+    transition: transform 0.15s ease;
+}
+
+.tabulator-row.cert-row-expanded .cert-expand-icon {
+    transform: rotate(90deg);
+    color: #ce201b;
+}
+
+.cert-detail-panel {
+    display: none;
+    padding: 10px 14px;
+    background-color: #f9f9f9;
+    border-top: 1px solid #e0e0e0;
+    cursor: default;
+}
+
+.tabulator-row.cert-row-expanded .cert-detail-panel {
+    display: block;
+}
+
+.cert-detail-empty {
+    color: #888888;
+    font-size: 13px;
+    font-style: italic;
+}
+
+.cert-detail-table {
+    width: auto; 
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+    .cert-detail-table th,
+    .cert-detail-table td {
+        text-align: left;
+        padding: 6px 10px;
+        border-bottom: 1px solid #e5e5e5;
+    }
+
+    .cert-detail-table th {
+        color: #555555;
+        font-weight: 600;
+        background-color: #f1f1f1;
+    }
+
+    .cert-detail-table th.cert-month-col,
+.cert-detail-table td.cert-month-col {
+	text-align: center;
+	padding: 6px 4px;
+	min-width: 34px;
+}
+
+.cert-month-bar {
+    height: 10px;
+    border-radius: 2px;
+}
+
+.cert-month-bar--deprecated {
+    background-color: #ce201b;
+}
+
+.cert-month-bar--ok {
+    background-color: #2e9e4f;
+}
+
 /* Barra delle Schede Tab */
 .tabs-container {
     display: flex;
@@ -225,3 +297,28 @@ body {
         line-height: 1.2;
         opacity: 0.75;
     }
+
+.loading-indicator {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 60px 0;
+    color: #555555;
+    font-size: 15px;
+}
+
+.loading-spinner {
+    width: 28px;
+    height: 28px;
+    border: 3px solid #e0e0e0;
+    border-top-color: #ce201b;
+    border-radius: 50%;
+    animation: loading-spin 0.8s linear infinite;
+}
+
+@keyframes loading-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}

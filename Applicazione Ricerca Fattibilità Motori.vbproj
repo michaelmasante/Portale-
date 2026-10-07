@@ -92,13 +92,16 @@
     <Import Include="System.Web.UI.HtmlControls" />
   </ItemGroup>
   <ItemGroup>
+    <Content Include="Certificati.html" />
     <Content Include="CSS\Footer\Footer.css" />
     <Content Include="CSS\Header\Header.css" />
+    <Content Include="CSS\LavoriInCorso\LavoriInCorso.css" />
     <Content Include="CSS\Motori\Motori.css" />
     <Content Include="CSS\Motori\tabulator.min.css" />
     <Content Include="CSS\Portal\Portale.css" />
     <Content Include="get_files.php" />
     <Content Include="Footer.html" />
+    <Content Include="LavoriInCorso.html" />
     <Content Include="IMG\LOGHI\Logo.png" />
     <Content Include="IMG\Portal\IvecoGroup.png" />
     <Content Include="JS\Motori\Motori.js" />
@@ -106,9 +109,8 @@
     <Content Include="JS\Portal\header-loader.js" />
     <Content Include="JS\Portal\Portal.js" />
     <Content Include="Header.html" />
-    <Content Include="Motori.html" />
-    <Content Include="MotoriController.cs" />
     <Content Include="Portale.html" />
+    <Content Include="UnioneFile.html" />
     <Content Include="Web.config" />
   </ItemGroup>
   <ItemGroup>
@@ -143,6 +145,9 @@
   <ItemGroup>
     <Content Include="File\Motori\ShopOrder F1A 01.09.2026.xlsx" />
     <Content Include="File\Motori\ShopOrder S8000 01.09.2026.xlsx" />
+    <Content Include="File\Motori\file_unito.xlsx" />
+    <Content Include="File\Certificati\ShopOrderTOT.xlsx" />
+    <Content Include="File\Certificati\TAG.xlsx" />
     <None Include="My Project\Application.myapp">
       <Generator>MyApplicationCodeGenerator</Generator>
       <LastGenOutput>Application.Designer.vb</LastGenOutput>

@@ -1,0 +1,65 @@
+﻿body {
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    font-family: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+    background-color: #f3f5f9;
+    color: #2b2f42;
+}
+
+
+.wip-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px 16px 40px;
+    text-align: center;
+}
+
+.wip-illustration {
+    width: min(92vw, 640px);
+    height: auto;
+}
+
+.wip-title {
+    margin: 12px 0 0;
+    font-size: clamp(2rem, 6vw, 3.25rem);
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #2b2f42;
+}
+
+    .wip-title::after {
+        content: "";
+        display: block;
+        width: 140px;
+        height: 8px;
+        margin: 16px auto 0;
+        border-radius: 4px;
+        background: repeating-linear-gradient(-45deg, #f2b705 0 10px, #2b2f42 10px 20px);
+    }
+
+.wip-load {
+    transform-origin: 302px 60px;
+    animation: wip-swing 5s ease-in-out infinite;
+}
+
+@keyframes wip-swing {
+    0%, 100% {
+        transform: rotate(-2.5deg);
+    }
+
+    50% {
+        transform: rotate(2.5deg);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .wip-load {
+        animation: none;
+    }
+}

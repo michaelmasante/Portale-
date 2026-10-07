@@ -1,19 +1,42 @@
 ﻿document.addEventListener("DOMContentLoaded", function () {
     const REDIRECTS = {
-        Carichi: "http://10.105.206.11/Carichi",
-        CertificazioneCarichi: "http://10.105.206.11/CertificazioneCarichi",
-        CheckList: "http://10.105.206.11/CheckList",
-        Motori: "Motori.html",
-        Controlli: "http://10.105.206.11/Controlli",
-        Foto: "http://10.105.206.11/Foto",
-        Im: "http://10.105.206.11/Im",
-        Incompleti: "http://10.105.206.11/Incompleti",
-        ITChat: "http://10.105.206.11/ITChat",
-        Liv2: "http://10.105.206.11/Liv2",
-        Mezzisollevamento: "http://10.105.206.11/Mezzisollevamento",
-        Produzione: "http://10.105.206.11/Produzione"
+        UnioneFile: "UnioneFile.html",
+        Certificati: "Certificati.html",
+        Prossimamente: "LavoriInCorso.html"
     };
+    const PAGE_VERSION = "0.0.1";
 
+    function escapeHtml(value) {
+        return String(value)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#39;");
+    }
+
+    /* Caricamento Async del Footer per aggiungere dettagli della pagina*/
+    function addVersionToFooter() {
+        const placeholder = document.getElementById("footer-placeholder");
+        if (!placeholder) return;
+
+        const tryInsert = () => {
+            const container = placeholder.querySelector(".footer-container");
+            if (!container) return false;
+            if (!container.querySelector(".footer-right")) {
+                const right = document.createElement("div");
+                right.className = "footer-right";
+                right.innerHTML = `<span>Versione ${escapeHtml(PAGE_VERSION)}</span>`;
+                container.appendChild(right);
+            }
+            return true;
+        };
+
+        if (tryInsert()) return;
+        const observer = new MutationObserver(() => { if (tryInsert()) observer.disconnect(); });
+        observer.observe(placeholder, { childList: true, subtree: true });
+    }
+    addVersionToFooter();
     document.querySelectorAll("[data-redirect]").forEach(function (el) {
         el.addEventListener("click", function (ev) {
             ev.preventDefault();

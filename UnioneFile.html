@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Unisci due Excel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{--bg:#f5f6f3;--card:#fff;--ink:#1c2826;--mute:#5e6b68;--line:#d6dbd7;--acc:#0e6b5b;--acc-ink:#fff;--warn:#a4452c;--soft:#e6f0ec;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#141a19;--card:#1b2321;--ink:#e6ece9;--mute:#9aa8a4;--line:#2f3b38;--acc:#4cc2a8;--acc-ink:#0b1d19;--warn:#e58a72;--soft:#20302c}}
+:root[data-theme="dark"]{--bg:#141a19;--card:#1b2321;--ink:#e6ece9;--mute:#9aa8a4;--line:#2f3b38;--acc:#4cc2a8;--acc-ink:#0b1d19;--warn:#e58a72;--soft:#20302c}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 16px/1.5 "IBM Plex Sans",system-ui,-apple-system,Segoe UI,sans-serif}
+main{max-width:880px;margin:0 auto;padding:32px 20px 64px}
+h1{font-size:28px;line-height:1.2;margin:0 0 6px;font-weight:600;letter-spacing:-.01em}
+.lead{color:var(--mute);margin:0 0 28px;max-width:60ch}
+section{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:20px;margin-bottom:16px}
+h2{font-size:17px;margin:0 0 14px;font-weight:600}
+h2 span{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:50%;background:var(--acc);color:var(--acc-ink);font-size:13px;margin-right:8px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:640px){.grid{grid-template-columns:1fr}}
+.drop{display:block;border:2px dashed var(--line);border-radius:8px;padding:22px 14px;text-align:center;cursor:pointer;transition:border-color .15s,background .15s}
+.drop:hover,.drop:focus-within,.drop.over{border-color:var(--acc);background:var(--soft)}
+.drop.ok{border-style:solid;border-color:var(--acc);background:var(--soft)}
+.drop input{position:absolute;opacity:0;width:1px;height:1px}
+.drop b{display:block}.drop small{color:var(--mute);word-break:break-all}
+label.f{display:block;font-size:14px;color:var(--mute);margin-bottom:4px}
+select{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);font:inherit}
+.cols{max-height:220px;overflow:auto;border:1px solid var(--line);border-radius:6px;padding:6px 10px;background:var(--bg)}
+.cols label{display:flex;gap:8px;align-items:center;padding:3px 0;cursor:pointer}
+.mini{font-size:13px;margin:6px 0 0}
+.mini button{background:none;border:0;color:var(--acc);cursor:pointer;font:inherit;padding:0 10px 0 0;text-decoration:underline}
+.btn{background:var(--acc);color:var(--acc-ink);border:0;border-radius:6px;padding:11px 20px;font:600 16px inherit;font-family:inherit;cursor:pointer}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.ghost{background:none;color:var(--ink);border:1px solid var(--line);margin-left:8px}
+:focus-visible{outline:3px solid var(--acc);outline-offset:2px}
+.msg{margin:12px 0 0;font-size:15px}.msg.err{color:var(--warn)}
+.tw{overflow-x:auto;margin-top:14px;border:1px solid var(--line);border-radius:6px}
+table{border-collapse:collapse;font-size:14px;width:100%}
+th,td{padding:6px 10px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+th{background:var(--soft);font-weight:600}
+td:empty::after{content:"–";color:var(--mute)}
+.hide{display:none}
+</style>
+</head>
+<body>
+<main>
+  <h1>Unisci due Excel</h1>
+  <p class="lead">Carica i due file, scegli la colonna in comune e le colonne da tenere. Funziona come un CERCA.VERT: i file restano sul tuo computer e non vengono inviati da nessuna parte.</p>
+
+  <section>
+    <h2><span>1</span>Carica i file</h2>
+    <div class="grid">
+      <label class="drop" id="dropA"><input type="file" accept=".xlsx,.xls,.xlsm,.csv"><b>File 1 (principale)</b><small>Trascina qui o clicca per scegliere</small></label>
+      <label class="drop" id="dropB"><input type="file" accept=".xlsx,.xls,.xlsm,.csv"><b>File 2 (da cui cercare)</b><small>Trascina qui o clicca per scegliere</small></label>
+    </div>
+    <p class="msg err hide" id="err"></p>
+  </section>
+
+  <div id="cfg" class="hide">
+    <section>
+      <h2><span>2</span>Colonna chiave</h2>
+      <div class="grid">
+        <div><label class="f" for="keyA">Chiave nel File 1</label><select id="keyA"></select></div>
+        <div><label class="f" for="keyB">Chiave nel File 2</label><select id="keyB"></select></div>
+      </div>
+      <div style="margin-top:14px;max-width:420px"><label class="f" for="mode">Righe del File 1 senza corrispondenza</label>
+        <select id="mode"><option value="left">Tienile (colonne del File 2 vuote)</option><option value="inner">Scartale</option></select></div>
+    </section>
+
+    <section>
+      <h2><span>3</span>Colonne da includere</h2>
+      <div class="grid">
+        <div><label class="f">Dal File 1</label><div class="cols" id="colsA"></div>
+          <p class="mini"><button data-all="A">Tutte</button><button data-none="A">Nessuna</button></p></div>
+        <div><label class="f">Dal File 2</label><div class="cols" id="colsB"></div>
+          <p class="mini"><button data-all="B">Tutte</button><button data-none="B">Nessuna</button></p></div>
+      </div>
+    </section>
+
+    <section>
+      <h2><span>4</span>Risultato</h2>
+      <button class="btn" id="go">Unisci e mostra anteprima</button>
+      <button class="btn ghost hide" id="dl">Scarica Excel</button>
+      <p class="msg" id="info"></p>
+      <div class="tw hide" id="prevw"><table id="prev"></table></div>
+    </section>
+  </div>
+</main>
+
+<script>
+const S={A:null,B:null};let outAOA=null;
+const $=id=>document.getElementById(id);
+const norm=v=>String(v??'').trim().toLowerCase();
+
+function showErr(t){const e=$('err');e.textContent=t||'';e.classList.toggle('hide',!t)}
+
+function load(side,file){
+  showErr('');
+  const r=new FileReader();
+  r.onload=e=>{
+    try{
+      const wb=XLSX.read(e.target.result,{type:'array'});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      const aoa=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:true});
+      if(aoa.length<2)throw new Error('vuoto');
+      const headers=aoa[0].map((h,i)=>String(h).trim()||('Colonna '+(i+1)));
+      S[side]={name:file.name,headers,rows:aoa.slice(1).filter(r=>r.some(c=>c!==''))};
+      const d=$('drop'+side);d.classList.add('ok');
+      d.querySelector('small').textContent=file.name+' · '+S[side].rows.length+' righe';
+      if(S.A&&S.B)setup();
+    }catch(x){showErr('Non riesco a leggere "'+file.name+'". Controlla che sia un file Excel o CSV con le intestazioni nella prima riga.')}
+  };
+  r.readAsArrayBuffer(file);
+}
+
+['A','B'].forEach(s=>{
+  const d=$('drop'+s),inp=d.querySelector('input');
+  inp.addEventListener('change',()=>inp.files[0]&&load(s,inp.files[0]));
+  d.addEventListener('dragover',e=>{e.preventDefault();d.classList.add('over')});
+  d.addEventListener('dragleave',()=>d.classList.remove('over'));
+  d.addEventListener('drop',e=>{e.preventDefault();d.classList.remove('over');e.dataTransfer.files[0]&&load(s,e.dataTransfer.files[0])});
+});
+
+function opts(sel,headers,pick){sel.innerHTML=headers.map((h,i)=>`<option value="${i}">${h.replace(/</g,'&lt;')}</option>`).join('');sel.value=pick}
+
+function setup(){
+  const a=S.A.headers,b=S.B.headers;
+  let ia=0,ib=0;
+  a.forEach((h,i)=>{const j=b.findIndex(x=>norm(x)===norm(h));if(j>-1&&ia===0&&ib===0&&!(i===0&&j===0&&false)){ia=i;ib=j}});
+  opts($('keyA'),a,ia);opts($('keyB'),b,ib);
+  drawCols();$('cfg').classList.remove('hide');
+  $('dl').classList.add('hide');$('prevw').classList.add('hide');$('info').textContent='';
+}
+
+function drawCols(){
+  const kb=+$('keyB').value;
+  ['A','B'].forEach(s=>{
+    $('cols'+s).innerHTML=S[s].headers.map((h,i)=>{
+      const on=s==='A'||i!==kb;
+      return `<label><input type="checkbox" data-s="${s}" value="${i}" ${on?'checked':''}> ${h.replace(/</g,'&lt;')}</label>`}).join('');
+  });
+}
+$('keyB').addEventListener('change',drawCols);
+
+document.addEventListener('click',e=>{
+  const t=e.target;
+  if(t.dataset&&(t.dataset.all||t.dataset.none)){
+    const s=t.dataset.all||t.dataset.none;
+    $('cols'+s).querySelectorAll('input').forEach(c=>c.checked=!!t.dataset.all);
+  }
+});
+
+function sel(s){return [...$('cols'+s).querySelectorAll('input:checked')].map(c=>+c.value)}
+
+$('go').addEventListener('click',()=>{
+  const ka=+$('keyA').value,kb=+$('keyB').value,ca=sel('A'),cb=sel('B'),inner=$('mode').value==='inner';
+  if(!ca.length&&!cb.length){$('info').textContent='Seleziona almeno una colonna.';$('info').className='msg err';return}
+  const map=new Map();
+  S.B.rows.forEach(r=>{const k=norm(r[kb]);if(k!==''&&!map.has(k))map.set(k,r)});
+  const hA=ca.map(i=>S.A.headers[i]);
+  const hB=cb.map(i=>{const h=S.B.headers[i];return hA.includes(h)?h+' (File 2)':h});
+  const out=[[...hA,...hB]];let miss=0;
+  S.A.rows.forEach(r=>{
+    const m=map.get(norm(r[ka]));
+    if(!m){miss++;if(inner)return}
+    out.push([...ca.map(i=>r[i]??''),...cb.map(i=>m?(m[i]??''):'')]);
+  });
+  outAOA=out;
+  const n=out.length-1;
+  $('info').className='msg';
+  $('info').textContent=n+' righe nel risultato. '+(miss?miss+' righe del File 1 non hanno corrispondenza nel File 2'+(inner?' e sono state scartate.':'.'):'Tutte le righe hanno trovato corrispondenza.');
+  $('prev').innerHTML='<thead><tr>'+out[0].map(h=>`<th>${String(h).replace(/</g,'&lt;')}</th>`).join('')+'</tr></thead><tbody>'+
+    out.slice(1,11).map(r=>'<tr>'+r.map(c=>`<td>${String(c).replace(/</g,'&lt;')}</td>`).join('')+'</tr>').join('')+'</tbody>';
+  $('prevw').classList.remove('hide');
+  $('dl').classList.toggle('hide',n===0);
+});
+
+$('dl').addEventListener('click',async()=>{
+  if(!outAOA)return;
+  const ws=XLSX.utils.aoa_to_sheet(outAOA),wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'Unione');
+  const buf=XLSX.write(wb,{bookType:'xlsx',type:'array'});
+  try{
+    const dl=await claude.use('downloads');
+    if(dl){await dl.save({filename:'file_unito.xlsx',data:buf});return}
+  }catch(e){if(e&&e.code==='declined')return}
+  try{
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(new Blob([buf],{type:'application/octet-stream'}));
+    a.download='file_unito.xlsx';a.click();
+  }catch(e){showErr('Download non disponibile in questa vista.')}
+});
+</script>
+</body>
+</html>
