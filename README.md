@@ -31,9 +31,15 @@ Il Portale Servizi funge da punto d'accesso unificato a diverse funzionalità az
 
 I dettagli, ottenuti da un secondo file sono consultabili a click sulla riga.
 
+Rev 0.0.8
 <img width="983" height="596" alt="Con sottotabella" src="https://github.com/user-attachments/assets/7c0d77b1-625f-46ae-b4c6-a85e9175cdf1" />
 
 Serviva una visione da Oggi a +12mesi di deprecamento di licenze e certificati prodotti
+
+Rev 0.0.9
+<img width="2490" height="1226" alt="immagine" src="https://github.com/user-attachments/assets/8ac7e263-9df9-4a8e-aec3-e10c707ee56d" />
+
+Aggiunta Visualizzazione per TAG anzichè per PN, così da poter fare la ricerca al contrario 
 
 Una delle componenti chiave integrate nel portale è il modulo di filtri avanzati in griglia, sviluppato per consentire la consultazione rapida con filtri incrociati.
 
