@@ -28,7 +28,7 @@
 	 Tutte le altre colonne hanno solo il campo "Cerca...".*/
 	const dropdownColumns = ["Customer Eng.", "Customer", "Tipo Motore", "Omologazione", "ENTE", "PRP"];
 	// Versione di questa pagina: viene aggiunta al footer condiviso
-	const PAGE_VERSION = "0.0.8";
+	const PAGE_VERSION = "0.0.7";
 
 	/* Il footer viene caricato in modo asincrono dentro #footer-placeholder,
 	/ quindi si aspetta che compaia e poi ci si inserisce la versione*/
@@ -165,6 +165,15 @@
 	let certificatiTableData = [];
 	let table = null;
 
+	// Vista "Per Tag": si parte dai tag e si arriva ai PN
+	let activeView = "pn";        // "pn" oppure "tag"
+	let tagTable = null;          // creata alla prima apertura della scheda
+	let tagsIndex = null;         // tag -> Map(PN normalizzato -> { pn, intervals })
+	let certByKey = null;         // PN normalizzato -> riga Certificati (creata solo quando serve)
+	let pnGridDiv = null;
+	let tagGridDiv = null;
+	const searchByView = { pn: "", tag: "" };
+
 	Promise.all([
 		loadExcelFile(certificatiFilePath),
 		loadExcelFile(tagFilePath)
@@ -200,6 +209,7 @@
 		/* Raggruppa le righe TAG per chiave: ogni Element può ripetersi,
 		 quindi ogni chiave ha un ARRAY di intervalli (VStart/VEnd + descrizione)*/
 		const tagByKey = new Map();
+		tagsIndex = new Map();
 		tagParsed.tableData.forEach(row => {
 			const key = normalizeText(row[TAG_KEY_COLUMN]);
 			if (!key) return;
@@ -209,6 +219,16 @@
 				VEnd: row["VEnd"],
 				TagElementDescription: row["TagElementDescription"]
 			});
+
+			// Stesso dato visto dal lato del tag: per ogni tag, i PN che lo hanno
+			// e gli intervalli di deprecamento di ciascuno
+			const tagName = String(row["TagElementDescription"] ?? "").trim();
+			if (!tagName) return;
+			let byPn = tagsIndex.get(tagName);
+			if (!byPn) { byPn = new Map(); tagsIndex.set(tagName, byPn); }
+			let entry = byPn.get(key);
+			if (!entry) { entry = { pn: String(row[TAG_KEY_COLUMN]).trim(), intervals: [] }; byPn.set(key, entry); }
+			entry.intervals.push({ VStart: row["VStart"], VEnd: row["VEnd"] });
 		});
 
 		/* Aggancia a ogni riga Certificati l'elenco (eventualmente vuoto)
@@ -256,7 +276,9 @@
 		return months;
 	}
 
-	/* Defizione di deprecato Se vero è Rosso se falso Verde.*/
+	/* Un mese è "deprecato" se si sovrappone, anche solo in parte, all'intervallo
+	 VStart-VEnd. Se manca una delle due date l'intervallo resta aperto da
+	 quel lato; se mancano entrambe non si può dire nulla, quindi non deprecato.*/
 	function isDeprecatedInMonth(vStart, vEnd, month) {
 		const s = toDate(vStart);
 		const e = toDate(vEnd);
@@ -332,11 +354,14 @@
 
 		if (select) select.onchange = () => {
 			input.value = select.value;
-			// Scelta dal menu: corrispondenza esatta 
+			// Scelta dal menu: corrispondenza esatta (solo "IVECO", non "IVECO BUS")
 			columnFilters[field] = { value: input.value, exact: true };
 			applyCombinedFilters();
 		};
 		input.oninput = () => {
+			// Testo digitato: ricerca "contiene". Il menu torna su "Tutti", così
+			// scegliere poi un valore dal menu fa sempre scattare il filtro esatto
+			// (riselezionare lo stesso valore già mostrato non genererebbe nessun evento)
 			if (select) select.value = "";
 			columnFilters[field] = { value: input.value, exact: false };
 			clearTimeout(filterDebounceTimer);
@@ -363,6 +388,7 @@
 		const gridDiv = document.createElement("div");
 		gridDiv.className = "tab-grid";
 		gridsWrapper.appendChild(gridDiv);
+		pnGridDiv = gridDiv;
 
 		table = new Tabulator(gridDiv, {
 			data: certificatiTableData,
@@ -395,8 +421,8 @@
 			 di dettaglio (es. per selezionare un testo)*/
 			if (e.target.closest(".cert-detail-panel")) return;
 			row.getElement().classList.toggle("cert-row-expanded");
-			/* Dopo un filtro Tabulator fissa l'altezza del contenitore interno a quella
-			 delle righe visibili: ricalcolarla fa comparire (o sparire) il pannello*/
+			// Dopo un filtro Tabulator fissa l'altezza del contenitore interno a quella
+			// delle righe visibili: ricalcolarla fa comparire (o sparire) il pannello
 			table.redraw();
 		});
 
@@ -406,6 +432,376 @@
 		table.on("dataFiltered", (filters, rows) => updateDropdownOptions(rows.map(r => r.getData())));
 
 		setupCustomerDropdown();
+		createTabs();
+	}
+
+	/* ================= Vista "Per Tag" =================
+	 Righe = tag (ricercabili con la casella in alto). Aprendo un tag si vedono
+	 i mesi (rosso se almeno un PN è deprecato in quel mese, verde se nessuno);
+	 cliccando un mese si apre l'elenco dei PN con le colonne di Certificati.*/
+
+	const TAG_LIST_PAGE = 100; // PN mostrati per volta nell'elenco di un mese
+	const TAG_LIST_MAX_OPTIONS = 500; // oltre questi valori distinti il menu a tendina di colonna non viene creato
+	const listCollator = new Intl.Collator("it", { numeric: true, sensitivity: "base" }); // ordina "T2" prima di "T10"
+	const searchPlaceholderPn = document.getElementById("global-search")?.placeholder || "";
+
+	function createTabs() {
+		if (!tabsContainer) return;
+		tabsContainer.innerHTML = "";
+		[{ id: "pn", label: "Per PN Motore" }, { id: "tag", label: "Per Tag" }].forEach(t => {
+			const btn = document.createElement("button");
+			btn.type = "button";
+			btn.className = "tab-btn" + (t.id === activeView ? " active" : "");
+			btn.dataset.view = t.id;
+			btn.textContent = t.label;
+			btn.onclick = () => switchView(t.id);
+			tabsContainer.appendChild(btn);
+		});
+	}
+
+	function switchView(view) {
+		if (view === activeView) return;
+		const firstTagOpen = view === "tag" && !tagTable; // la tabella sta per essere creata
+		const searchInput = document.getElementById("global-search");
+		if (searchInput) searchByView[activeView] = searchInput.value; // ogni scheda ricorda la sua ricerca
+		activeView = view;
+		tabsContainer.querySelectorAll(".tab-btn").forEach(b => b.classList.toggle("active", b.dataset.view === view));
+
+		pnGridDiv.style.display = view === "pn" ? "" : "none";
+		if (view === "tag") ensureTagTable();
+		if (tagGridDiv) tagGridDiv.style.display = view === "tag" ? "" : "none";
+
+		if (searchInput) {
+			searchInput.value = searchByView[view];
+			searchInput.placeholder = view === "tag" ? "🔍 Cerca un tag..." : searchPlaceholderPn;
+		}
+		// il filtro Customer riguarda solo i PN
+		if (multiselectContainer) multiselectContainer.style.display = view === "pn" ? "" : "none";
+		// alla prima apertura la tabella dei tag è appena nata (e Tabulator non ha finito di costruirla): niente redraw
+		if (!firstTagOpen) (view === "pn" ? table : tagTable).redraw();
+	}
+
+	function ensureTagTable() {
+		if (tagTable) return;
+		tagGridDiv = document.createElement("div");
+		tagGridDiv.className = "tab-grid";
+		gridsWrapper.appendChild(tagGridDiv);
+
+		const data = [...tagsIndex.entries()]
+			.map(([tag, byPn]) => ({ Tag: tag, pnCount: byPn.size }))
+			.sort((a, b) => a.Tag.localeCompare(b.Tag, undefined, { sensitivity: "base", numeric: true }));
+
+		tagTable = new Tabulator(tagGridDiv, {
+			data,
+			columns: [
+				{ title: "", field: "__expand", width: 36, headerSort: false, formatter: () => `<span class="cert-expand-icon">▸</span>` },
+				{ title: "Tag", field: "Tag", minWidth: 220, sorter: "string" },
+				{ title: "N° PN", field: "pnCount", width: 130, sorter: "number" }
+			],
+			layout: "fitDataFill",
+			pagination: "local",
+			paginationSize: 25,
+			nestedFieldSeparator: false,
+			rowFormatter: function (row) {
+				const el = row.getElement();
+				if (el.querySelector(".cert-detail-panel")) return;
+				const panel = document.createElement("div");
+				panel.className = "cert-detail-panel tag-panel";
+				panel.dataset.tag = row.getData().Tag;
+				el.appendChild(panel);
+				// contenuto costruito solo quando la riga si apre (vedi rowClick)
+				if (el.classList.contains("cert-row-expanded")) fillTagPanel(panel);
+			}
+		});
+
+		tagTable.on("rowClick", function (e, row) {
+			if (e.target.closest(".cert-detail-panel")) return;
+			const el = row.getElement();
+			if (el.classList.toggle("cert-row-expanded")) fillTagPanel(el.querySelector(".tag-panel"));
+			redrawTagTable(); // ricalcola l'altezza dopo l'apertura/chiusura
+		});
+	}
+
+	// Ricerca globale della scheda "Per Tag": filtra i tag (contiene, senza distinguere maiuscole)
+	function applyTagFilter() {
+		if (!tagTable) return;
+		const val = document.getElementById("global-search")?.value.toLowerCase().trim() || "";
+		if (!val) return tagTable.clearFilter();
+		tagTable.setFilter(data => String(data.Tag).toLowerCase().includes(val));
+	}
+
+	// Come isDeprecatedInMonth, ma con le date convertite una sola volta e tenute nell'intervallo
+	function intervalHitsMonth(iv, month) {
+		if (iv.s === undefined) { iv.s = toDate(iv.VStart); iv.e = toDate(iv.VEnd); }
+		if (!iv.s && !iv.e) return false;
+		return (!iv.s || iv.s <= month.end) && (!iv.e || iv.e >= month.start);
+	}
+
+	function getCertByKey() {
+		if (!certByKey) {
+			certByKey = new Map();
+			for (const row of certificatiTableData) {
+				const k = normalizeText(row[CERTIFICATI_KEY_COLUMN]);
+				if (k && !certByKey.has(k)) certByKey.set(k, row);
+			}
+		}
+		return certByKey;
+	}
+
+	function fillTagPanel(panel) {
+		if (!panel || panel._tag) return;
+		const tag = panel.dataset.tag;
+		const byPn = tagsIndex.get(tag);
+		const months = getTimelineMonths();
+		const total = byPn.size;
+
+		// per ogni mese: i PN di questo tag deprecati in quel mese (con l'intervallo che li copre)
+		const deprecated = months.map(() => []);
+		for (const [key, entry] of byPn) {
+			months.forEach((mo, i) => {
+				const iv = entry.intervals.find(x => intervalHitsMonth(x, mo));
+				if (iv) deprecated[i].push({ key, entry, iv });
+			});
+		}
+		panel._tag = { byPn, months, deprecated, total, selected: null, items: [], shown: 0, isRed: false };
+
+		const heads = months.map(mo => `<th class="cert-month-col" title="${mo.title}">${mo.label}</th>`).join("");
+		const cells = months.map((mo, i) => {
+			const n = deprecated[i].length;
+			const tip = n ? `${mo.title}: ${n} PN deprecati su ${total}` : `${mo.title}: nessun PN deprecato (${total} PN)`;
+			return `<td class="cert-month-col"><div class="tag-month-btn" role="button" data-month="${i}" title="${escapeHtml(tip)}">`
+				+ `<div class="cert-month-bar ${n === 0 ? "cert-month-bar--ok" : (n === total ? "cert-month-bar--deprecated" : "cert-month-bar--mixed")}"></div>`
+				+ `<span class="tag-month-count">${n}/${total}</span></div></td>`;
+		}).join("");
+
+		panel.innerHTML = `
+			<table class="cert-detail-table tag-month-table">
+				<thead><tr>${heads}</tr></thead>
+				<tbody><tr>${cells}</tr></tbody>
+			</table>
+			<div class="tag-pn-list"></div>
+		`;
+
+		panel.addEventListener("click", e => {
+			const monthBtn = e.target.closest(".tag-month-btn");
+			if (monthBtn) return selectTagMonth(panel, Number(monthBtn.dataset.month));
+			const sortTh = e.target.closest(".tag-sort-th");
+			if (sortTh) return sortTagList(panel, Number(sortTh.dataset.col));
+			if (e.target.closest(".tag-more-btn")) appendTagItems(panel);
+		});
+		// filtri dell'elenco PN: testo (contiene, con piccolo ritardo) e menu a tendina (esatto)
+		panel.addEventListener("input", e => {
+			const input = e.target.closest(".tag-list-filter-input");
+			if (input) onTagFilterInput(panel, input);
+		});
+		panel.addEventListener("change", e => {
+			const select = e.target.closest(".tag-list-filter-select");
+			if (select) onTagFilterSelect(panel, select);
+		});
+	}
+
+	// Ridisegna la tabella dei tag senza far perdere il focus alla casella in cui si sta scrivendo
+	// (Tabulator stacca e riattacca le righe, e il browser toglierebbe il focus al filtro)
+	function redrawTagTable() {
+		const active = document.activeElement;
+		const inPanel = active && active.closest && active.closest(".tag-panel");
+		const caret = inPanel && typeof active.selectionStart === "number" ? [active.selectionStart, active.selectionEnd] : null;
+		tagTable.redraw();
+		if (inPanel && document.body.contains(active)) {
+			active.focus();
+			if (caret) { try { active.setSelectionRange(caret[0], caret[1]); } catch (err) { /* campo senza selezione */ } }
+		}
+	}
+
+	// Colonne dell'elenco PN: stato (rosso/verde), le colonne di Certificati, le due date
+	function tagListColumns() {
+		return [
+			{ id: "__status", label: "", kind: "status" },
+			...certificatiHeaders.map(h => ({ id: h, label: h, kind: "text", dropdown: dropdownColumns.includes(h) })),
+			{ id: "__start", label: "Inizio Deprecamento", kind: "date" },
+			{ id: "__end", label: "Fine Deprecamento", kind: "date" }
+		];
+	}
+
+	// Valore (testo) di una cella dell'elenco, usato per mostrarla, filtrarla e ordinarla
+	function tagItemValue(item, col) {
+		if (col.id === "__status") return item.iv ? "Deprecato" : "Non deprecato";
+		if (col.id === "__start") return item.iv ? formatDateValue(item.iv.VStart) : "";
+		if (col.id === "__end") return item.iv ? formatDateValue(item.iv.VEnd) : "";
+		return String(item.cert ? (item.cert[col.id] ?? "") : (col.id === CERTIFICATI_KEY_COLUMN ? item.entry.pn : ""));
+	}
+
+	function tagItemDateKey(item, col) {
+		if (!item.iv) return -Infinity;
+		const d = toDate(col.id === "__start" ? item.iv.VStart : item.iv.VEnd);
+		return d ? d.getTime() : -Infinity;
+	}
+
+	function compareTagItems(col, dir) {
+		const sign = dir === "desc" ? -1 : 1;
+		if (col.kind === "status") return (a, b) => sign * ((a.iv ? 0 : 1) - (b.iv ? 0 : 1));
+		if (col.kind === "date") return (a, b) => sign * (tagItemDateKey(a, col) - tagItemDateKey(b, col) || 0);
+		return (a, b) => sign * listCollator.compare(tagItemValue(a, col), tagItemValue(b, col));
+	}
+
+	// Ordine di partenza: prima i PN deprecati, poi gli altri; dentro ogni gruppo per PN
+	function defaultTagOrder(a, b) {
+		return ((a.iv ? 0 : 1) - (b.iv ? 0 : 1)) || (a.entry.pn < b.entry.pn ? -1 : a.entry.pn > b.entry.pn ? 1 : 0);
+	}
+
+	function tagFilterControl(st, col, ci) {
+		if (col.kind === "status") {
+			return `<select class="tag-list-filter-select" data-col="${ci}"><option value="">Tutti</option><option value="Deprecato">Deprecati</option><option value="Non deprecato">Non deprecati</option></select>`;
+		}
+		const input = `<input type="text" class="tag-list-filter-input" data-col="${ci}" placeholder="Cerca...">`;
+		if (!col.dropdown) return input;
+
+		const distinct = new Set();
+		for (const item of st.base) {
+			const v = tagItemValue(item, col).trim();
+			if (v) distinct.add(v);
+		}
+		if (distinct.size > TAG_LIST_MAX_OPTIONS) return input;
+		const options = [...distinct].sort(listCollator.compare).map(v => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join("");
+		return `<div class="tag-filter-combo"><select class="tag-list-filter-select" data-col="${ci}"><option value="">Tutti</option>${options}</select>${input}</div>`;
+	}
+
+	function selectTagMonth(panel, i) {
+		const st = panel._tag;
+		const listEl = panel.querySelector(".tag-pn-list");
+		const closing = st.selected === i; // secondo click sullo stesso mese: chiude l'elenco
+		panel.querySelectorAll(".tag-month-btn").forEach(b => b.classList.toggle("is-selected", !closing && Number(b.dataset.month) === i));
+
+		if (closing) {
+			st.selected = null;
+			clearTimeout(st.filterTimer);
+			listEl.innerHTML = "";
+			redrawTagTable();
+			return;
+		}
+
+		st.selected = i;
+		const mo = st.months[i];
+		const dep = st.deprecated[i];
+		st.isRed = dep.length > 0;
+
+		// Tutti i PN del tag, ognuno col suo stato in questo mese (rosso = deprecato, verde = no)
+		const certMap = getCertByKey();
+		const depIv = new Map(dep.map(d => [d.key, d.iv]));
+		const base = [...st.byPn].map(([key, entry]) => ({ key, entry, iv: depIv.get(key) || null, cert: certMap.get(key) || null }));
+		base.sort(defaultTagOrder);
+
+		// ogni mese riparte da zero: nessun filtro, ordine di partenza
+		clearTimeout(st.filterTimer);
+		st.base = base;
+		st.items = base;
+		st.shown = 0;
+		st.cols = tagListColumns();
+		st.filters = {};
+		st.sort = null;
+
+		const title = st.isRed
+			? `${mo.title}: ${dep.length} PN deprecati su ${st.total}`
+			: `${mo.title}: nessun PN deprecato (${st.total} PN)`;
+		const sortHeads = st.cols.map((c, ci) =>
+			`<th class="tag-sort-th${c.kind === "status" ? " cert-month-col" : ""}" data-col="${ci}" title="Clicca per ordinare">${escapeHtml(c.label)}<span class="tag-sort-ind"></span></th>`
+		).join("");
+		const filterHeads = st.cols.map((c, ci) => `<th class="tag-filter-th">${tagFilterControl(st, c, ci)}</th>`).join("");
+
+		listEl.innerHTML = `
+			<p class="tag-pn-title">${escapeHtml(title)}<span class="tag-pn-filtered"></span></p>
+			<div class="tag-pn-scroll">
+				<table class="cert-detail-table tag-pn-table">
+					<thead>
+						<tr class="tag-sort-row">${sortHeads}</tr>
+						<tr class="tag-filter-row">${filterHeads}</tr>
+					</thead>
+					<tbody></tbody>
+				</table>
+			</div>
+			<button type="button" class="tag-more-btn" hidden></button>
+		`;
+		appendTagItems(panel);
+	}
+
+	// Applica filtri e ordinamento correnti alla lista completa e ricomincia dalla prima pagina
+	function applyTagListView(panel) {
+		const st = panel._tag;
+		const active = Object.entries(st.filters)
+			.filter(([, f]) => f.value && f.value.trim())
+			.map(([ci, f]) => [st.cols[Number(ci)], f.value.trim(), f.value.trim().toLowerCase(), f.exact]);
+
+		let items = st.base;
+		if (active.length) {
+			items = items.filter(item => active.every(([col, v, vLower, exact]) => {
+				const cell = tagItemValue(item, col);
+				return exact ? cell.trim() === v : cell.toLowerCase().includes(vLower);
+			}));
+		}
+		if (st.sort) items = items.slice().sort(compareTagItems(st.cols[st.sort.col], st.sort.dir));
+
+		st.items = items;
+		st.shown = 0;
+		appendTagItems(panel);
+	}
+
+	function sortTagList(panel, ci) {
+		const st = panel._tag;
+		const dir = st.sort && st.sort.col === ci && st.sort.dir === "asc" ? "desc" : "asc";
+		st.sort = { col: ci, dir };
+		panel.querySelectorAll(".tag-sort-th").forEach(th => {
+			const current = Number(th.dataset.col) === ci;
+			th.classList.toggle("is-asc", current && dir === "asc");
+			th.classList.toggle("is-desc", current && dir === "desc");
+		});
+		applyTagListView(panel);
+	}
+
+	function onTagFilterInput(panel, input) {
+		const st = panel._tag;
+		const select = input.parentElement.querySelector(".tag-list-filter-select");
+		if (select) select.value = ""; // testo digitato: ricerca "contiene", il menu torna su "Tutti"
+		st.filters[Number(input.dataset.col)] = { value: input.value, exact: false };
+		clearTimeout(st.filterTimer);
+		st.filterTimer = setTimeout(() => applyTagListView(panel), 250);
+	}
+
+	function onTagFilterSelect(panel, select) {
+		const st = panel._tag;
+		const input = select.parentElement.querySelector(".tag-list-filter-input");
+		if (input) input.value = select.value;
+		st.filters[Number(select.dataset.col)] = { value: select.value, exact: true }; // scelta dal menu: esatta
+		applyTagListView(panel);
+	}
+
+	function appendTagItems(panel) {
+		const st = panel._tag;
+		const tbody = panel.querySelector(".tag-pn-table tbody");
+		const moreBtn = panel.querySelector(".tag-more-btn");
+		if (st.shown === 0) tbody.innerHTML = "";
+
+		const chunk = st.items.slice(st.shown, st.shown + TAG_LIST_PAGE);
+		const rows = chunk.map(item => {
+			const tds = st.cols.map(col => col.kind === "status"
+				? `<td class="cert-month-col"><div class="cert-month-bar ${item.iv ? "cert-month-bar--deprecated" : "cert-month-bar--ok"}"></div></td>`
+				: `<td>${escapeHtml(tagItemValue(item, col))}</td>`
+			).join("");
+			return `<tr${item.cert ? "" : ' class="tag-pn-missing" title="PN non presente in Certificati"'}>${tds}</tr>`;
+		}).join("");
+		tbody.insertAdjacentHTML("beforeend", rows);
+		if (!st.items.length) {
+			tbody.innerHTML = `<tr><td class="tag-pn-none" colspan="${st.cols.length}">Nessun PN corrisponde ai filtri</td></tr>`;
+		}
+
+		st.shown += chunk.length;
+		const remaining = st.items.length - st.shown;
+		moreBtn.hidden = remaining <= 0;
+		moreBtn.textContent = `Mostra altri (${Math.min(TAG_LIST_PAGE, remaining)} di ${remaining} rimasti)`;
+
+		const filteredEl = panel.querySelector(".tag-pn-filtered");
+		if (filteredEl) filteredEl.textContent = st.items.length === st.base.length ? "" : ` — filtrati: ${st.items.length} su ${st.base.length}`;
+
+		redrawTagTable();
 	}
 
 	function setupCustomerDropdown() {
@@ -522,10 +918,12 @@
 		});
 	}
 
-	/* Global search funziona solo quando smetti di scrivere*/
+	// Ricerca globale con piccolo ritardo: il filtro parte una volta sola quando si
+	// smette di scrivere, invece che a ogni tasto (su decine di migliaia di righe
+	// ogni passaggio blocca la pagina per secondi)
 	let globalSearchTimer = null;
 	document.getElementById("global-search")?.addEventListener("keyup", () => {
 		clearTimeout(globalSearchTimer);
-		globalSearchTimer = setTimeout(applyCombinedFilters, 300);
+		globalSearchTimer = setTimeout(() => (activeView === "tag" ? applyTagFilter() : applyCombinedFilters()), 300);
 	});
 });
