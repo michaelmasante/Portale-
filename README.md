@@ -17,11 +17,15 @@ Il Portale Servizi funge da punto d'accesso unificato a diverse funzionalità az
 
 
 
-- Funzionalità Principali: Ricerca con filtri in griglia più file e fogli
+- Funzionalità Principali: Ricerca con filtri in griglia più file con chiave in comune.
 
 <img width="2502" height="970" alt="RIcerca" src="https://github.com/user-attachments/assets/86df4081-d07a-4c30-b564-d2a83ff8e476" />
 
+I dettagli, ottenuti da un secondo file sono consultabili a click sulla riga.
 
+<img width="983" height="596" alt="Con sottotabella" src="https://github.com/user-attachments/assets/7c0d77b1-625f-46ae-b4c6-a85e9175cdf1" />
+
+Serviva una visione da Oggi a +12mesi di deprecamento di licenze e certificati prodotti
 
 Una delle componenti chiave integrate nel portale è il modulo di filtri avanzati in griglia, sviluppato per consentire la consultazione rapida con filtri incrociati.
 
