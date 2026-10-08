@@ -28,10 +28,10 @@
 	 Tutte le altre colonne hanno solo il campo "Cerca...".*/
 	const dropdownColumns = ["Customer Eng.", "Customer", "Tipo Motore", "Omologazione", "ENTE", "PRP"];
 	// Versione di questa pagina: viene aggiunta al footer condiviso
-	const PAGE_VERSION = "0.0.7";
+	const PAGE_VERSION = "0.1.0";
 
 	/* Il footer viene caricato in modo asincrono dentro #footer-placeholder,
-	/ quindi si aspetta che compaia e poi ci si inserisce la versione*/
+	 quindi si aspetta che compaia e poi ci si inserisce la versione*/
 	function addVersionToFooter() {
 		const placeholder = document.getElementById("footer-placeholder");
 		if (!placeholder) return;
@@ -166,10 +166,11 @@
 	let table = null;
 
 	// Vista "Per Tag": si parte dai tag e si arriva ai PN
-	let activeView = "pn";        // "pn" oppure "tag"
-	let tagTable = null;          // creata alla prima apertura della scheda
-	let tagsIndex = null;         // tag -> Map(PN normalizzato -> { pn, intervals })
-	let certByKey = null;         // PN normalizzato -> riga Certificati (creata solo quando serve)
+	let activeView = "pn";
+	let tagTable = null;
+	let tagsIndex = null;
+	let certByKey = null;
+	let tagSheetName = "";        // nome del foglio del file TAG (è una data)
 	let pnGridDiv = null;
 	let tagGridDiv = null;
 	const searchByView = { pn: "", tag: "" };
@@ -190,6 +191,7 @@
 		// Si prende il primo foglio di ciascun file: non serve sapere il nome del foglio
 		const certificatiSheet = certificatiWorkbook.Sheets[certificatiWorkbook.SheetNames[0]];
 		const tagSheet = tagWorkbook.Sheets[tagWorkbook.SheetNames[0]];
+		tagSheetName = String(tagWorkbook.SheetNames[0] ?? "").trim();
 
 		const certificatiParsed = parseSheet(certificatiSheet, certificatiAllowedColumnsMap);
 		const tagParsed = parseSheet(tagSheet, tagAllowedColumnsMap);
@@ -286,17 +288,39 @@
 		return (!s || s <= month.end) && (!e || e >= month.start);
 	}
 
+	/* Riga sotto i mesi con la data di aggiornamento del file TAG
+	 (il nome del foglio del file TAG è sempre una data)*/
+	function buildTagUpdatedNote() {
+		if (!tagSheetName) return "";
+		return `<div class="cert-tag-updated">File TAG aggiornato al ${escapeHtml(tagSheetName)}</div>`;
+	}
+
 	function buildDetailPanel(tagMatches) {
 		const panel = document.createElement("div");
 		panel.className = "cert-detail-panel";
 
-		if (!tagMatches || !tagMatches.length) {
-			panel.innerHTML = `<div class="cert-detail-empty">Nessuna corrispondenza trovata in TAG.</div>`;
-			return panel;
-		}
-
 		const months = getTimelineMonths();
 		const monthHeaders = months.map(mo => `<th class="cert-month-col" title="${mo.title}">${mo.label}</th>`).join("");
+
+		// Nessun TAG per questo PN: solo la barra dei 12 mesi, tutta verde
+		if (!tagMatches || !tagMatches.length) {
+			const okCells = months.map(mo =>
+				`<td class="cert-month-col" title="${mo.title}"><div class="cert-month-bar cert-month-bar--ok"></div></td>`
+			).join("");
+
+			panel.innerHTML = `
+				<table class="cert-detail-table">
+					<thead>
+						<tr>${monthHeaders}</tr>
+					</thead>
+					<tbody>
+						<tr>${okCells}</tr>
+					</tbody>
+				</table>
+				${buildTagUpdatedNote()}
+			`;
+			return panel;
+		}
 
 		const rowsHtml = tagMatches.map(m => {
 			const monthCells = months.map(mo =>
@@ -320,6 +344,7 @@
 				</thead>
 				<tbody>${rowsHtml}</tbody>
 			</table>
+			${buildTagUpdatedNote()}
 		`;
 		return panel;
 	}
@@ -359,9 +384,9 @@
 			applyCombinedFilters();
 		};
 		input.oninput = () => {
-			// Testo digitato: ricerca "contiene". Il menu torna su "Tutti", così
-			// scegliere poi un valore dal menu fa sempre scattare il filtro esatto
-			// (riselezionare lo stesso valore già mostrato non genererebbe nessun evento)
+			/* Testo digitato: ricerca "contiene". Il menu torna su "Tutti", così
+			 scegliere poi un valore dal menu fa sempre scattare il filtro esatto
+			 (riselezionare lo stesso valore già mostrato non genererebbe nessun evento)*/
 			if (select) select.value = "";
 			columnFilters[field] = { value: input.value, exact: false };
 			clearTimeout(filterDebounceTimer);
@@ -600,8 +625,8 @@
 		});
 	}
 
-	// Ridisegna la tabella dei tag senza far perdere il focus alla casella in cui si sta scrivendo
-	// (Tabulator stacca e riattacca le righe, e il browser toglierebbe il focus al filtro)
+	/* Ridisegna la tabella dei tag senza far perdere il focus alla casella in cui si sta scrivendo
+	 (Tabulator stacca e riattacca le righe, e il browser toglierebbe il focus al filtro)*/
 	function redrawTagTable() {
 		const active = document.activeElement;
 		const inPanel = active && active.closest && active.closest(".tag-panel");
@@ -918,9 +943,7 @@
 		});
 	}
 
-	// Ricerca globale con piccolo ritardo: il filtro parte una volta sola quando si
-	// smette di scrivere, invece che a ogni tasto (su decine di migliaia di righe
-	// ogni passaggio blocca la pagina per secondi)
+	/* Ricerca globale parte una volta sola quando si smette di scrivere */
 	let globalSearchTimer = null;
 	document.getElementById("global-search")?.addEventListener("keyup", () => {
 		clearTimeout(globalSearchTimer);

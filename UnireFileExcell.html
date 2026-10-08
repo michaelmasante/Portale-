@@ -1,0 +1,388 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Unisci Excel</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: one narrow working column, three steps stacked top to bottom, result table full width at the end. */
+:root{
+  --bg:#f3f5f4; --surface:#ffffff; --fg:#17211e; --muted:#5d6b66; --line:#d5dcd9;
+  --accent:#0f6b55; --accent-fg:#ffffff; --accent-soft:#e2f0eb; --warn:#8a5a00; --warn-soft:#fbf1d9; --bad:#a3322b;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#121816; --surface:#1a2320; --fg:#e6ecea; --muted:#96a5a0; --line:#2e3b37;
+  --accent:#4fc3a1; --accent-fg:#08231b; --accent-soft:#1d332c; --warn:#e8c06a; --warn-soft:#33290f; --bad:#f08a82;
+  color-scheme:dark } }
+:root[data-theme="dark"]{
+  --bg:#121816; --surface:#1a2320; --fg:#e6ecea; --muted:#96a5a0; --line:#2e3b37;
+  --accent:#4fc3a1; --accent-fg:#08231b; --accent-soft:#1d332c; --warn:#e8c06a; --warn-soft:#33290f; --bad:#f08a82;
+  color-scheme:dark }
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--sans);font-size:15px;line-height:1.5}
+.wrap{max-width:880px;margin:0 auto;padding-inline:16px;padding-block:28px 56px;display:flex;flex-direction:column;gap:28px}
+h1{font-size:26px;font-weight:600;margin:0;letter-spacing:-.01em}
+.lead{margin:6px 0 0;color:var(--muted);max-width:60ch}
+section{display:flex;flex-direction:column;gap:12px}
+h2{font-size:16px;font-weight:600;margin:0;display:flex;gap:10px;align-items:baseline}
+h2 .n{font-family:var(--mono);font-size:13px;color:var(--accent);font-weight:500}
+.hint{color:var(--muted);font-size:13px;margin:0}
+
+.files{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+.drop{background:var(--surface);border:1.5px dashed var(--line);border-radius:6px;padding:14px;display:flex;flex-direction:column;gap:8px;min-width:0;cursor:pointer}
+.drop.over{border-color:var(--accent);background:var(--accent-soft)}
+.drop:focus-within{outline:2px solid var(--accent);outline-offset:2px}
+.drop input[type=file]{position:absolute;opacity:0;width:1px;height:1px}
+.role{font-size:12px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:500}
+.fname{font-family:var(--mono);font-size:13.5px;overflow-wrap:anywhere}
+.meta{font-size:13px;color:var(--muted)}
+.tag{display:inline-block;font-size:11px;text-transform:uppercase;letter-spacing:.06em;background:var(--warn-soft);color:var(--warn);padding:1px 6px;border-radius:3px;margin-left:6px;vertical-align:1px}
+.pick{font-size:13px;color:var(--accent);font-weight:500}
+select,input[type=text]{font:inherit;color:var(--fg);background:var(--surface);border:1px solid var(--line);border-radius:4px;padding:6px 8px;max-width:100%}
+
+.bar{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center}
+.count{font-family:var(--mono);font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+button{font:inherit;cursor:pointer;border-radius:4px;border:1px solid var(--line);background:var(--surface);color:var(--fg);padding:6px 12px}
+button:hover{border-color:var(--accent)}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button.primary{background:var(--accent);color:var(--accent-fg);border-color:var(--accent);font-weight:600;padding:9px 18px}
+button:disabled{opacity:.5;cursor:not-allowed}
+
+.cols{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:6px;display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:2px;max-height:300px;overflow:auto}
+.cols label{display:flex;gap:8px;align-items:center;padding:6px 8px;border-radius:4px;cursor:pointer;min-width:0}
+.cols label:hover{background:var(--accent-soft)}
+.cols input{accent-color:var(--accent);flex:none;width:16px;height:16px}
+.cols .letter{font-family:var(--mono);font-size:12px;color:var(--muted);flex:none;width:2.4ch}
+.cols .h{overflow-wrap:anywhere;min-width:0}
+.opts{display:flex;flex-direction:column;gap:8px}
+.opts label{display:flex;gap:8px;align-items:flex-start;cursor:pointer}
+.opts input{accent-color:var(--accent);margin-top:4px;flex:none}
+.note{background:var(--warn-soft);color:var(--warn);border-radius:4px;padding:8px 10px;font-size:13.5px}
+
+.tablebox{background:var(--surface);border:1px solid var(--line);border-radius:6px;overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-family:var(--mono);font-size:12.5px;font-variant-numeric:tabular-nums}
+th,td{padding:6px 10px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap;max-width:260px;overflow:hidden;text-overflow:ellipsis}
+th{font-family:var(--sans);font-weight:600;font-size:13px;background:var(--accent-soft);position:sticky;top:0}
+tr:last-child td{border-bottom:0}
+td.src{color:var(--muted)}
+tr.gap td{text-align:center;color:var(--muted);font-family:var(--sans);font-size:12.5px;background:var(--bg)}
+.save{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.save label{font-size:13px;color:var(--muted)}
+#status{font-size:13.5px;min-height:1.5em;margin:0}
+#status.err{color:var(--bad)}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Unisci Excel</h1>
+    <p class="lead">Mette le righe di due file Excel in un solo file. Le intestazioni vengono dal primo file e scegli tu quali colonne tenere. I file restano nel tuo browser, non vengono caricati da nessuna parte.</p>
+  </header>
+
+  <section>
+    <h2><span class="n">1</span>Scegli i due file</h2>
+    <div class="files">
+      <label class="drop" id="dropA">
+        <span class="role">Primo file · dà le intestazioni</span>
+        <input type="file" id="fileA" accept=".xlsx,.xls,.xlsm,.csv,.ods">
+        <span class="fname" id="nameA"></span>
+        <span class="meta" id="metaA"></span>
+        <select id="sheetA" hidden aria-label="Foglio del primo file"></select>
+        <span class="pick">Scegli o trascina qui un file</span>
+      </label>
+      <label class="drop" id="dropB">
+        <span class="role">Secondo file · righe aggiunte sotto</span>
+        <input type="file" id="fileB" accept=".xlsx,.xls,.xlsm,.csv,.ods">
+        <span class="fname" id="nameB"></span>
+        <span class="meta" id="metaB"></span>
+        <select id="sheetB" hidden aria-label="Foglio del secondo file"></select>
+        <span class="pick">Scegli o trascina qui un file</span>
+      </label>
+    </div>
+    <p class="hint">Formati accettati: .xlsx, .xls, .csv, .ods. La prima riga di ogni foglio è considerata riga di intestazione.</p>
+  </section>
+
+  <section>
+    <h2><span class="n">2</span>Colonne da tenere</h2>
+    <div class="bar">
+      <button type="button" id="all">Tutte</button>
+      <button type="button" id="none">Nessuna</button>
+      <span class="count" id="colCount"></span>
+    </div>
+    <div class="cols" id="cols"></div>
+    <div class="opts">
+      <label><input type="checkbox" id="hdr2" checked><span>Il secondo file ha una riga di intestazione, da scartare</span></label>
+      <label><input type="checkbox" id="byName"><span>Abbina le colonne del secondo file per nome dell'intestazione, invece che per posizione</span></label>
+      <label><input type="checkbox" id="origin"><span>Aggiungi una colonna «File di origine»</span></label>
+    </div>
+    <div class="note" id="note" hidden></div>
+  </section>
+
+  <section>
+    <h2><span class="n">3</span>Controlla e salva</h2>
+    <div class="count" id="rowCount"></div>
+    <div class="tablebox"><table id="preview"></table></div>
+    <div class="save">
+      <label for="outName">Nome del file</label>
+      <input type="text" id="outName" value="file-unito.xlsx" size="24">
+      <button type="button" class="primary" id="save">Scarica il file unito</button>
+    </div>
+    <p id="status" role="status"></p>
+  </section>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+(function(){
+const $ = id => document.getElementById(id);
+const U = XLSX.utils;
+
+// ---------- state ----------
+const S = { a:null, b:null, keep:new Set(), sample:true };
+
+function sampleBook(rows){
+  const wb = U.book_new();
+  U.book_append_sheet(wb, U.aoa_to_sheet(rows), 'Foglio1');
+  return wb;
+}
+function loadSamples(){
+  S.a = { name:'ordini-gennaio.xlsx', sample:true, sheet:'Foglio1', wb:sampleBook([
+    ['Codice','Cliente','Città','Data ordine','Importo'],
+    ['A-1041','Ferramenta Bianchi','Torino','08/01/2026',412.5],
+    ['A-1042','Studio Conti','Milano','12/01/2026',1280],
+    ['A-1043','Bar Centrale','Bologna','19/01/2026',96.4],
+    ['A-1044','Officina Riva','Verona','27/01/2026',735]])};
+  S.b = { name:'ordini-febbraio.xlsx', sample:true, sheet:'Foglio1', wb:sampleBook([
+    ['Codice','Cliente','Città','Data ordine','Importo'],
+    ['A-1045','Studio Conti','Milano','03/02/2026',640],
+    ['A-1046','Panificio Greco','Bari','11/02/2026',188.9],
+    ['A-1047','Ferramenta Bianchi','Torino','20/02/2026',521.3]])};
+}
+
+// ---------- reading ----------
+function grid(f){
+  const ws = f.wb.Sheets[f.sheet];
+  if(!ws || !ws['!ref']) return {ws:{}, r0:0, r1:-1, c0:0, c1:-1};
+  const r = U.decode_range(ws['!ref']);
+  return {ws, r0:r.s.r, r1:r.e.r, c0:r.s.c, c1:r.e.c};
+}
+function cellAt(g, r, c){
+  if(c < g.c0 || c > g.c1) return null;
+  const x = g.ws[U.encode_cell({r, c})];
+  if(!x || x.t === 'z' || x.v === undefined || x.v === null || x.v === '') return null;
+  return x;
+}
+function text(x){
+  if(!x) return '';
+  if(x.w !== undefined) return String(x.w);
+  try { return U.format_cell(x); } catch(e){ return String(x.v); }
+}
+const norm = s => String(s).trim().toLowerCase().replace(/\s+/g,' ');
+
+function headers(g){
+  const out = [];
+  for(let c = g.c0; c <= g.c1; c++){
+    const t = text(cellAt(g, g.r0, c)).trim();
+    out.push({ col:c, letter:U.encode_col(c), label:t || '(senza nome)', raw:t });
+  }
+  return out;
+}
+
+// ---------- merge ----------
+function build(){
+  const res = { head:[], rows:[], nA:0, nB:0, warn:'' };
+  if(!S.a) return res;
+  const ga = grid(S.a), ha = headers(ga);
+  const kept = ha.filter(h => S.keep.has(h.col));
+  const origin = $('origin').checked, byName = $('byName').checked;
+  const hdr2 = $('hdr2').checked || byName;
+  res.head = kept.map(h => h.label);
+  if(origin) res.head.push('File di origine');
+
+  const push = (g, r, mapCol, allCols, srcName) => {
+    let any = false;
+    for(const c of allCols){ if(cellAt(g, r, c)){ any = true; break; } }
+    if(!any) return false;
+    const row = kept.map(h => { const c = mapCol(h); return c == null ? null : cellAt(g, r, c); });
+    if(origin) row.push({t:'s', v:srcName});
+    res.rows.push(row);
+    return true;
+  };
+  const range = (a, b) => { const o = []; for(let i = a; i <= b; i++) o.push(i); return o; };
+
+  const colsA = range(ga.c0, ga.c1);
+  for(let r = ga.r0 + 1; r <= ga.r1; r++) if(push(ga, r, h => h.col, colsA, S.a.name)) res.nA++;
+
+  if(S.b){
+    const gb = grid(S.b), colsB = range(gb.c0, gb.c1);
+    let mapCol;
+    if(byName){
+      const idx = new Map();
+      headers(gb).forEach(h => { const k = norm(h.raw); if(k && !idx.has(k)) idx.set(k, h.col); });
+      mapCol = h => { const c = idx.get(norm(h.raw)); return c === undefined ? null : c; };
+      const missing = kept.filter(h => mapCol(h) == null).map(h => h.label);
+      if(missing.length) res.warn = 'Nel secondo file non esistono queste colonne, resteranno vuote: ' + missing.join(', ') + '.';
+    } else {
+      mapCol = h => gb.c0 + (h.col - ga.c0);
+      const nA = colsA.length, nB = colsB.length;
+      if(gb.r1 >= gb.r0 && nA !== nB)
+        res.warn = 'Il primo file ha ' + nA + ' colonne, il secondo ' + nB + '. Le colonne sono abbinate per posizione: controlla l\'anteprima.';
+      else if($('hdr2').checked){
+        const hb = headers(gb), diff = ha.some((h, i) => hb[i] && norm(hb[i].raw) !== norm(h.raw));
+        if(diff) res.warn = 'Le intestazioni del secondo file sono diverse o in un altro ordine. Se le colonne sono le stesse ma spostate, attiva l\'abbinamento per nome.';
+      }
+    }
+    for(let r = gb.r0 + (hdr2 ? 1 : 0); r <= gb.r1; r++) if(push(gb, r, mapCol, colsB, S.b.name)) res.nB++;
+  }
+  return res;
+}
+
+function toWorkbook(res){
+  const ws = {}, widths = res.head.map(h => h.length);
+  res.head.forEach((h, c) => { ws[U.encode_cell({r:0, c})] = {t:'s', v:h}; });
+  res.rows.forEach((row, i) => row.forEach((x, c) => {
+    if(!x) return;
+    const o = {t:x.t, v:x.v};
+    if(x.z) o.z = x.z;
+    ws[U.encode_cell({r:i + 1, c})] = o;
+    if(i < 2000){ const n = text(x).length; if(n > widths[c]) widths[c] = n; }
+  }));
+  ws['!ref'] = U.encode_range({s:{r:0, c:0}, e:{r:res.rows.length, c:Math.max(res.head.length - 1, 0)}});
+  ws['!cols'] = widths.map(w => ({wch:Math.min(Math.max(w + 2, 8), 50)}));
+  const wb = U.book_new();
+  U.book_append_sheet(wb, ws, 'Unito');
+  return wb;
+}
+
+// ---------- rendering ----------
+function el(tag, txt, cls){ const e = document.createElement(tag); if(txt !== undefined) e.textContent = txt; if(cls) e.className = cls; return e; }
+
+function renderFile(k){
+  const f = S[k === 'A' ? 'a' : 'b'], name = $('name' + k), meta = $('meta' + k), sel = $('sheet' + k);
+  name.textContent = ''; meta.textContent = ''; sel.hidden = true;
+  if(!f){ meta.textContent = 'Nessun file'; return; }
+  name.textContent = f.name;
+  if(f.sample) name.appendChild(el('span', 'Esempio', 'tag'));
+  const g = grid(f);
+  meta.textContent = Math.max(g.r1 - g.r0, 0) + ' righe · ' + Math.max(g.c1 - g.c0 + 1, 0) + ' colonne';
+  if(f.wb.SheetNames.length > 1){
+    sel.hidden = false; sel.textContent = '';
+    f.wb.SheetNames.forEach(n => { const o = el('option', 'Foglio: ' + n); o.value = n; o.selected = n === f.sheet; sel.appendChild(o); });
+  }
+}
+
+function renderCols(){
+  const box = $('cols'); box.textContent = '';
+  const hs = S.a ? headers(grid(S.a)) : [];
+  hs.forEach(h => {
+    const l = el('label'), i = el('input');
+    i.type = 'checkbox'; i.id = 'col-' + h.col; i.checked = S.keep.has(h.col);
+    i.addEventListener('change', () => { i.checked ? S.keep.add(h.col) : S.keep.delete(h.col); renderResult(); });
+    l.append(i, el('span', h.letter, 'letter'), el('span', h.label, 'h'));
+    box.appendChild(l);
+  });
+  if(!hs.length) box.appendChild(el('p', 'Il primo file non ha colonne.', 'hint'));
+  return hs.length;
+}
+
+function renderResult(){
+  const res = build(), t = $('preview'); t.textContent = '';
+  const total = S.a ? headers(grid(S.a)).length : 0;
+  $('colCount').textContent = S.keep.size + ' di ' + total + ' colonne selezionate';
+  $('note').hidden = !res.warn; $('note').textContent = res.warn;
+  $('rowCount').textContent = res.nA + ' righe dal primo file + ' + res.nB + ' dal secondo = ' + (res.nA + res.nB) + ' righe';
+  $('save').disabled = !res.head.length || !res.rows.length;
+  if(!res.head.length){ t.appendChild(el('caption', 'Seleziona almeno una colonna.')); return res; }
+
+  const trh = el('tr'); res.head.forEach(h => trh.appendChild(el('th', h)));
+  const thead = el('thead'); thead.appendChild(trh); t.appendChild(thead);
+  const tb = el('tbody');
+  const addRow = row => { const tr = el('tr'); row.forEach(x => { const td = el('td', text(x)); td.title = td.textContent; tr.appendChild(td); }); tb.appendChild(tr); };
+  const gap = n => { const tr = el('tr', undefined, 'gap'), td = el('td', '… altre ' + n + ' righe …'); td.colSpan = res.head.length; tr.appendChild(td); tb.appendChild(tr); };
+  // show the start of each file's block so the join is visible
+  const showA = Math.min(res.nA, 4), showB = Math.min(res.nB, 4);
+  res.rows.slice(0, showA).forEach(addRow);
+  if(res.nA > showA) gap(res.nA - showA);
+  res.rows.slice(res.nA, res.nA + showB).forEach(addRow);
+  if(res.nB > showB) gap(res.nB - showB);
+  t.appendChild(tb);
+  return res;
+}
+
+function renderAll(resetCols){
+  renderFile('A'); renderFile('B');
+  if(resetCols){ S.keep = new Set(S.a ? headers(grid(S.a)).map(h => h.col) : []); }
+  renderCols(); renderResult();
+}
+
+function say(msg, err){ const s = $('status'); s.textContent = msg || ''; s.className = err ? 'err' : ''; }
+
+// ---------- file input ----------
+async function take(k, file){
+  if(!file) return;
+  say('');
+  try{
+    const wb = XLSX.read(await file.arrayBuffer(), {type:'array', cellNF:true, cellDates:false});
+    if(!wb.SheetNames.length) throw new Error('vuoto');
+    if(S.sample){ S.a = null; S.b = null; S.sample = false; }   // drop the examples at the first real file
+    S[k === 'A' ? 'a' : 'b'] = { name:file.name, wb, sheet:wb.SheetNames[0] };
+    renderAll(k === 'A' || !S.a);
+  }catch(e){
+    say('Non riesco a leggere «' + file.name + '». Controlla che sia un file Excel o CSV valido.', true);
+  }
+}
+['A','B'].forEach(k => {
+  const drop = $('drop' + k), input = $('file' + k), sel = $('sheet' + k);
+  input.addEventListener('change', () => { take(k, input.files[0]); input.value = ''; });
+  ['dragenter','dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('over'); }));
+  ['dragleave','drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('over'); }));
+  drop.addEventListener('drop', e => take(k, e.dataTransfer.files[0]));
+  sel.addEventListener('click', e => e.stopPropagation());
+  sel.addEventListener('change', () => { S[k === 'A' ? 'a' : 'b'].sheet = sel.value; renderAll(k === 'A'); });
+});
+
+$('all').addEventListener('click', () => { S.keep = new Set(headers(grid(S.a)).map(h => h.col)); renderCols(); renderResult(); });
+$('none').addEventListener('click', () => { S.keep.clear(); renderCols(); renderResult(); });
+['hdr2','byName','origin'].forEach(id => $(id).addEventListener('change', () => {
+  if(id === 'byName'){ $('hdr2').disabled = $('byName').checked; if($('byName').checked) $('hdr2').checked = true; }
+  renderResult();
+}));
+
+// ---------- save ----------
+const downloadsP = (window.claude && window.claude.use) ? window.claude.use('downloads').catch(() => null) : Promise.resolve(null);
+
+$('save').addEventListener('click', async () => {
+  const res = build();
+  if(!res.head.length || !res.rows.length) return;
+  let name = $('outName').value.trim() || 'file-unito';
+  if(!/\.xlsx$/i.test(name)) name = name.replace(/\.[a-z0-9]{1,5}$/i, '') + '.xlsx';
+  $('save').disabled = true; say('Preparo il file…');
+  try{
+    const bytes = XLSX.write(toWorkbook(res), {bookType:'xlsx', type:'array', compression:true});
+    const blob = new Blob([bytes], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+    const dl = await downloadsP;
+    if(dl){
+      await dl.save({filename:name, data:blob});
+      say('Salvato: ' + name + ' (' + res.rows.length + ' righe, ' + res.head.length + ' colonne).');
+    } else {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob); a.download = name;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+      say('File pronto: ' + name + '. Se il download non parte, apri la pagina dall\'app Claude o dal browser.');
+    }
+  }catch(e){
+    const code = e && e.code;
+    if(code === 'declined') say('Salvataggio annullato.');
+    else if(code === 'rate_limited') say('C\'è già una richiesta di salvataggio aperta. Rispondi a quella, poi riprova.', true);
+    else say('Non è stato possibile salvare il file' + (code ? ' (' + code + ')' : '') + '.', true);
+  }finally{
+    $('save').disabled = false;
+  }
+});
+
+loadSamples();
+renderAll(true);
+})();
+</script>
+
+</body></html>

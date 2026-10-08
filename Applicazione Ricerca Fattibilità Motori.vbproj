@@ -110,7 +110,8 @@
     <Content Include="JS\Portal\Portal.js" />
     <Content Include="Header.html" />
     <Content Include="Portale.html" />
-    <Content Include="UnioneFile.html" />
+    <Content Include="Cercavert.html" />
+    <Content Include="UnireFileExcell.html" />
     <Content Include="Web.config" />
   </ItemGroup>
   <ItemGroup>

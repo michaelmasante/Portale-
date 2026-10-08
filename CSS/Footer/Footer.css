@@ -44,3 +44,27 @@ body {
 #footer-placeholder {
     margin-top: auto;
 }
+/* Link nel footer: stesso aspetto del testo, sottolineati solo al passaggio del mouse */
+.footer-link {
+    color: inherit;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+    .footer-link:hover {
+        text-decoration: underline;
+    }
+
+/* La "i" è una sola lettera: attorno a lei un'area di click invisibile, più grande della lettera */
+.footer-link-i {
+    position: relative;
+}
+
+    .footer-link-i::before {
+        content: "";
+        position: absolute;
+        top: -6px;
+        bottom: -6px;
+        left: -5px;
+        right: -5px;
+    }

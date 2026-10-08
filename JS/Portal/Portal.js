@@ -1,10 +1,11 @@
 ﻿document.addEventListener("DOMContentLoaded", function () {
     const REDIRECTS = {
-        UnioneFile: "UnioneFile.html",
+        Cercavert: "Cercavert.html",
         Certificati: "Certificati.html",
-        Prossimamente: "LavoriInCorso.html"
+        Prossimamente: "LavoriInCorso.html",
+        UnireExcell: "UnireFileExcell.html"
     };
-    const PAGE_VERSION = "0.0.1";
+    const PAGE_VERSION = "0.1.0";
 
     function escapeHtml(value) {
         return String(value)

@@ -455,3 +455,8 @@
     color: #999999;
     font-style: italic;
 }
+.cert-tag-updated {
+    margin-top: 8px;
+    font-size: 12px;
+    color: #666666;
+}
