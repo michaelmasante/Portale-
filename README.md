@@ -37,7 +37,8 @@ Rev 0.0.8
 Serviva una visione da Oggi a +12mesi di deprecamento di licenze e certificati prodotti
 
 Rev 0.0.9
-<img width="2490" height="1226" alt="immagine" src="https://github.com/user-attachments/assets/8ac7e263-9df9-4a8e-aec3-e10c707ee56d" />
+<img width="2490" height="1226" alt="Ricerca Per TAG" src="https://github.com/user-attachments/assets/b4fd557a-259c-4d2c-93c8-f5563f663a42" />
+
 
 Aggiunta Visualizzazione per TAG anzichè per PN, così da poter fare la ricerca al contrario 
 
