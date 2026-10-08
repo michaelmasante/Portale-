@@ -2,14 +2,21 @@ Portale Servizi - Ricerca Fattibilità Motori
 
 Un'applicazione web modulare e responsive progettata per centralizzare e ottimizzare l'accesso a vari strumenti aziendali
 Iniezione dinamica dei componenti globali (Header e Footer) gestita lato client tramite fetch in JavaScript (ComponentsLoader.js).
+
 📂 Struttura del Progetto
 
 ├── Components/         # Componenti HTML riutilizzabili (Header.html, Footer.html)
+
 ├── CSS/                # Fogli di stile organizzati per modulo (Header, Footer, Motori, Portal)
+
 ├── JS/                 # Script JavaScript client-side e logica applicativa
+
 ├── IMG/                # Risorse grafiche e loghi aziendali
+
 ├── File/               # Cartelle dati (es. File/Motori/ per i dataset locali)
+
 ├── Portale.html        # Landing page/Home del Portale Servizi
+
 └── Motori.html         # Interfaccia di gestione e ricerca fattibilità motori
 
 Portale
