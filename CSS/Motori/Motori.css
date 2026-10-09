@@ -455,8 +455,91 @@
     color: #999999;
     font-style: italic;
 }
+
+/* Riga "File TAG aggiornato al ..." sotto i mesi */
 .cert-tag-updated {
     margin-top: 8px;
     font-size: 12px;
     color: #666666;
+}
+
+/* Per cambiare tonalità basta modificare questi colori */
+:root {
+    --grid-blue-accent: #3f4254;
+    --grid-blue-text: #ffffff;
+    --grid-blue-line: #aeb2c2;
+    --grid-blue-edge: #8d92a8;
+    --grid-blue-header: #3f4254;
+    --grid-blue-zebra: #f6f7fa;
+    --grid-blue-hover: #e7e9f0;
+}
+.tabulator .tabulator-header {
+    background-color: var(--grid-blue-header);
+    border-bottom: 1px solid var(--grid-blue-edge);
+    color: var(--grid-blue-text);
+}
+
+    .tabulator .tabulator-header .tabulator-col {
+        background: var(--grid-blue-header);
+        border-right: 1px solid var(--grid-blue-line);
+    }
+
+        .tabulator .tabulator-header .tabulator-col.tabulator-sortable.tabulator-col-sorter-element:hover {
+            background-color: var(--grid-blue-line);
+        }
+
+        .tabulator .tabulator-header .tabulator-col .tabulator-col-content .tabulator-col-sorter .tabulator-arrow,
+        .tabulator .tabulator-header .tabulator-col.tabulator-sortable[aria-sort=none] .tabulator-col-content .tabulator-col-sorter .tabulator-arrow {
+            border-bottom-color: var(--grid-blue-edge);
+        }
+
+.tabulator-row .tabulator-cell {
+    border-right: 1px solid var(--grid-blue-line);
+}
+
+.tabulator-row.tabulator-row-even {
+    background-color: var(--grid-blue-zebra);
+}
+
+.tabulator-row.tabulator-selectable:hover {
+    background-color: var(--grid-blue-hover);
+}
+
+.tabulator .tabulator-footer {
+    background-color: var(--grid-blue-header);
+    border-top: 1px solid var(--grid-blue-edge);
+    color: var(--grid-blue-text);
+}
+
+    .tabulator .tabulator-footer .tabulator-page {
+        border-color: var(--grid-blue-edge);
+    }
+
+        .tabulator .tabulator-footer .tabulator-page.active {
+            color: var(--grid-blue-accent);
+            border-color: var(--grid-blue-accent);
+        }
+
+/* Linea sotto le schede e tabelle di dettaglio (righe espanse) */
+.tabs-container {
+    border-bottom: 2px solid var(--grid-blue-accent);
+}
+
+.cert-detail-panel {
+    background-color: var(--grid-blue-zebra);
+    border-top: 1px solid var(--grid-blue-line);
+}
+
+.cert-detail-table th,
+.cert-detail-table td {
+    border-bottom: 1px solid var(--grid-blue-line);
+}
+
+.cert-detail-table th {
+    color: var(--grid-blue-text);
+    background-color: var(--grid-blue-header);
+}
+
+.tag-sort-th:hover {
+    background-color: var(--grid-blue-line);
 }

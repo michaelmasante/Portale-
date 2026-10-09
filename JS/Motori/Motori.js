@@ -292,7 +292,7 @@
 	 (il nome del foglio del file TAG è sempre una data)*/
 	function buildTagUpdatedNote() {
 		if (!tagSheetName) return "";
-		return `<div class="cert-tag-updated">File TAG aggiornato al ${escapeHtml(tagSheetName)}</div>`;
+		return `<div class="cert-tag-updated">Nessun TAG VUOTO trovato. File dei TAG aggiornato al "${escapeHtml(tagSheetName)}"</div>`;
 	}
 
 	function buildDetailPanel(tagMatches) {
