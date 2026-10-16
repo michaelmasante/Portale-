@@ -28,7 +28,7 @@
 	 Tutte le altre colonne hanno solo il campo "Cerca...".*/
 	const dropdownColumns = ["Customer Eng.", "Customer", "Tipo Motore", "Omologazione", "ENTE", "PRP", "Status"];
 	// Versione di questa pagina: viene aggiunta al footer condiviso
-	const PAGE_VERSION = "0.1.0";
+	const PAGE_VERSION = "0.2.0";
 
 	/* Il footer viene caricato in modo asincrono dentro #footer-placeholder,
 	 quindi si aspetta che compaia e poi ci si inserisce la versione*/
