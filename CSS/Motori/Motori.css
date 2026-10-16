@@ -543,3 +543,54 @@
 .tag-sort-th:hover {
     background-color: var(--grid-blue-line);
 }
+
+/* ===== Vista "Per Mese" ===== */
+.month-view {
+    padding-top: 14px;
+}
+
+.month-tag-list {
+    margin-top: 14px;
+}
+
+/* Larghezze fisse: l'elenco dei PN aperto sotto un tag è molto largo e scorre da solo,
+   senza allargare la tabella dei tag */
+.month-tag-table {
+    width: 100%;
+    table-layout: fixed;
+}
+
+.month-col-open {
+    width: 36px;
+    text-align: center !important;
+}
+
+.month-col-state {
+    width: 110px;
+}
+
+.month-col-tag {
+    width: 320px;
+}
+
+.month-col-num {
+    width: 130px;
+}
+
+.month-tag-row {
+    cursor: pointer;
+}
+
+    .month-tag-row:hover td {
+        background-color: var(--grid-blue-hover, #e7e9f0);
+    }
+
+    .month-tag-row.is-open .cert-expand-icon {
+        transform: rotate(90deg);
+        color: #ce201b;
+    }
+
+.month-tag-detail > td {
+    padding: 10px 14px;
+    background-color: var(--grid-blue-zebra, #f6f7fa);
+}

@@ -13,7 +13,7 @@
 	 scrivendo il nome esattamente come compare nell'intestazione Excel.*/
 	const certificatiAllowedColumns = ["P/N Motore", "Engine code", "REF. EU FAMILY", "REF. US FAMILY",
 		"Application", "Customer Eng.", "Customer",
-		"Tipo Motore", "Omologazione", "ENTE", "PRP", "FGF GROUP",
+		"Tipo Motore", "Omologazione", "ENTE", "PRP", "FGF GROUP", "Status",
 		CERTIFICATI_KEY_COLUMN
 	];
 
@@ -26,7 +26,7 @@
 
 	/* Colonne che hanno anche il filtro a tendina, oltre alla ricerca testuale.
 	 Tutte le altre colonne hanno solo il campo "Cerca...".*/
-	const dropdownColumns = ["Customer Eng.", "Customer", "Tipo Motore", "Omologazione", "ENTE", "PRP"];
+	const dropdownColumns = ["Customer Eng.", "Customer", "Tipo Motore", "Omologazione", "ENTE", "PRP", "Status"];
 	// Versione di questa pagina: viene aggiunta al footer condiviso
 	const PAGE_VERSION = "0.1.0";
 
@@ -173,7 +173,7 @@
 	let tagSheetName = "";        // nome del foglio del file TAG (è una data)
 	let pnGridDiv = null;
 	let tagGridDiv = null;
-	const searchByView = { pn: "", tag: "" };
+	const searchByView = { pn: "", tag: "", month: "" };
 
 	Promise.all([
 		loadExcelFile(certificatiFilePath),
@@ -457,6 +457,7 @@
 		table.on("dataFiltered", (filters, rows) => updateDropdownOptions(rows.map(r => r.getData())));
 
 		setupCustomerDropdown();
+		multiFilters.forEach(setupMultiFilter);
 		createTabs();
 	}
 
@@ -473,7 +474,7 @@
 	function createTabs() {
 		if (!tabsContainer) return;
 		tabsContainer.innerHTML = "";
-		[{ id: "pn", label: "Per PN Motore" }, { id: "tag", label: "Per Tag" }].forEach(t => {
+		[{ id: "pn", label: "Per PN Motore" }, { id: "tag", label: "Per Tag" }, { id: "month", label: "Per Mese" }].forEach(t => {
 			const btn = document.createElement("button");
 			btn.type = "button";
 			btn.className = "tab-btn" + (t.id === activeView ? " active" : "");
@@ -494,16 +495,21 @@
 
 		pnGridDiv.style.display = view === "pn" ? "" : "none";
 		if (view === "tag") ensureTagTable();
+		if (view === "month") ensureMonthView();
 		if (tagGridDiv) tagGridDiv.style.display = view === "tag" ? "" : "none";
+		if (monthViewDiv) monthViewDiv.style.display = view === "month" ? "" : "none";
 
 		if (searchInput) {
 			searchInput.value = searchByView[view];
-			searchInput.placeholder = view === "tag" ? "🔍 Cerca un tag..." : searchPlaceholderPn;
+			// nelle schede Per Tag e Per Mese la casella cerca fra i nomi dei tag
+			searchInput.placeholder = view === "pn" ? searchPlaceholderPn : "🔍 Cerca un tag...";
 		}
 		// il filtro Customer riguarda solo i PN
 		if (multiselectContainer) multiselectContainer.style.display = view === "pn" ? "" : "none";
+		refreshMultiFiltersVisibility(); // anche quelli per Ref. US/EU Family
 		// alla prima apertura la tabella dei tag è appena nata (e Tabulator non ha finito di costruirla): niente redraw
-		if (!firstTagOpen) (view === "pn" ? table : tagTable).redraw();
+		// la scheda Per Mese non ha una tabella Tabulator da ridisegnare
+		if (!firstTagOpen && view !== "month") (view === "pn" ? table : tagTable).redraw();
 	}
 
 	function ensureTagTable() {
@@ -573,9 +579,9 @@
 		return certByKey;
 	}
 
-	function fillTagPanel(panel) {
-		if (!panel || panel._tag) return;
-		const tag = panel.dataset.tag;
+	/* Stato di un tag: i suoi PN, i 12 mesi e, per ogni mese, i PN deprecati (con l'intervallo
+	 che li copre). Lo usano sia la scheda Per Tag sia la scheda Per Mese.*/
+	function makeTagState(tag) {
 		const byPn = tagsIndex.get(tag);
 		const months = getTimelineMonths();
 		const total = byPn.size;
@@ -588,7 +594,14 @@
 				if (iv) deprecated[i].push({ key, entry, iv });
 			});
 		}
-		panel._tag = { byPn, months, deprecated, total, selected: null, items: [], shown: 0, isRed: false };
+		return { byPn, months, deprecated, total, selected: null, items: [], shown: 0, isRed: false };
+	}
+
+	function fillTagPanel(panel) {
+		if (!panel || panel._tag) return;
+		const tag = panel.dataset.tag;
+		panel._tag = makeTagState(tag);
+		const { months, deprecated, total } = panel._tag;
 
 		const heads = months.map(mo => `<th class="cert-month-col" title="${mo.title}">${mo.label}</th>`).join("");
 		const cells = months.map((mo, i) => {
@@ -607,6 +620,12 @@
 			<div class="tag-pn-list"></div>
 		`;
 
+		attachTagListHandlers(panel);
+	}
+
+	/* Clic su mese / intestazioni / "Mostra altri" e filtri dell'elenco PN di un pannello tag:
+	 gli stessi per la scheda Per Tag e per i tag aperti nella scheda Per Mese*/
+	function attachTagListHandlers(panel) {
 		panel.addEventListener("click", e => {
 			const monthBtn = e.target.closest(".tag-month-btn");
 			if (monthBtn) return selectTagMonth(panel, Number(monthBtn.dataset.month));
@@ -628,6 +647,7 @@
 	/* Ridisegna la tabella dei tag senza far perdere il focus alla casella in cui si sta scrivendo
 	 (Tabulator stacca e riattacca le righe, e il browser toglierebbe il focus al filtro)*/
 	function redrawTagTable() {
+		if (!tagTable || activeView === "month") return; // nella scheda Per Mese l'elenco PN è HTML normale
 		const active = document.activeElement;
 		const inPanel = active && active.closest && active.closest(".tag-panel");
 		const caret = inPanel && typeof active.selectionStart === "number" ? [active.selectionStart, active.selectionEnd] : null;
@@ -829,6 +849,266 @@
 		redrawTagTable();
 	}
 
+	/* ================= Vista "Per Mese" =================
+	 In alto i 12 mesi (la stessa barra del dettaglio PN e della scheda Per Tag).
+	 Il colore di un mese è quello dei suoi TAG (ognuno è verde, rosso o a strisce come nella scheda Per Tag):
+	 verde se sono tutti verdi, rosso se sono tutti rossi, verde a strisce rosse in tutti gli altri casi.
+	 Cliccando un mese si apre l'elenco dei TAG (ognuno col suo colore: quanti dei suoi PN
+	 sono deprecati); cliccando un tag si apre l'elenco dei suoi PN, lo stesso della scheda Per Tag.*/
+
+	let monthViewDiv = null;
+	let monthStats = null;   // calcolato una volta sola, alla prima apertura della scheda
+	let monthState = null;   // elenco dei tag del mese aperto (filtri, ordine, righe mostrate)
+
+	function monthBarClass(n, total) {
+		return n === 0 ? "cert-month-bar--ok" : (n === total ? "cert-month-bar--deprecated" : "cert-month-bar--mixed");
+	}
+
+	function monthTagState(item) {
+		return item.n === 0 ? "Non deprecato" : (item.n === item.total ? "Deprecato" : "Parziale");
+	}
+
+	/* Per ogni tag e per ognuno dei 12 mesi: quanti PN sono deprecati.
+	 Per ogni mese: quanti tag hanno almeno un PN deprecato (hit) e quanti li hanno deprecati tutti (full).*/
+	function getMonthStats() {
+		if (monthStats) return monthStats;
+		const months = getTimelineMonths();
+		const tags = [];
+		for (const [tag, byPn] of tagsIndex) {
+			const counts = months.map(() => 0);
+			for (const entry of byPn.values()) {
+				months.forEach((mo, i) => {
+					if (entry.intervals.some(iv => intervalHitsMonth(iv, mo))) counts[i]++;
+				});
+			}
+			tags.push({ tag, total: byPn.size, counts });
+		}
+		tags.sort((a, b) => listCollator.compare(a.tag, b.tag));
+		const hit = months.map((mo, i) => tags.reduce((acc, t) => acc + (t.counts[i] > 0 ? 1 : 0), 0));
+		const full = months.map((mo, i) => tags.reduce((acc, t) => acc + (t.counts[i] > 0 && t.counts[i] === t.total ? 1 : 0), 0));
+		monthStats = { months, tags, hit, full };
+		return monthStats;
+	}
+
+	// colore del mese: verde se nessun tag ha PN deprecati, rosso se ogni tag li ha deprecati tutti, altrimenti a strisce
+	function monthColorClass(stats, i) {
+		const totalTags = stats.tags.length;
+		return stats.hit[i] === 0 ? "cert-month-bar--ok" : (stats.full[i] === totalTags ? "cert-month-bar--deprecated" : "cert-month-bar--mixed");
+	}
+
+	function ensureMonthView() {
+		if (monthViewDiv) return;
+		const stats = getMonthStats();
+		const totalTags = stats.tags.length;
+
+		monthViewDiv = document.createElement("div");
+		monthViewDiv.className = "month-view";
+		gridsWrapper.appendChild(monthViewDiv);
+
+		const heads = stats.months.map(mo => `<th class="cert-month-col" title="${mo.title}">${mo.label}</th>`).join("");
+		const cells = stats.months.map((mo, i) => {
+			const n = stats.hit[i];
+			const tip = n ? `${mo.title}: ${n} tag con PN deprecati su ${totalTags} (${stats.full[i]} con tutti i PN deprecati)` : `${mo.title}: nessun tag con PN deprecati (${totalTags} tag)`;
+			return `<td class="cert-month-col"><div class="tag-month-btn" role="button" data-month="${i}" title="${escapeHtml(tip)}">`
+				+ `<div class="cert-month-bar ${monthColorClass(stats, i)}"></div>`
+				+ `<span class="tag-month-count">${n}/${totalTags}</span></div></td>`;
+		}).join("");
+
+		monthViewDiv.innerHTML = `
+			<table class="cert-detail-table tag-month-table month-bar-table">
+				<thead><tr>${heads}</tr></thead>
+				<tbody><tr>${cells}</tr></tbody>
+			</table>
+			${tagSheetName ? `<div class="cert-tag-updated">File dei TAG aggiornato al "${escapeHtml(tagSheetName)}"</div>` : ""}
+			<div class="month-tag-list"></div>
+		`;
+
+		monthViewDiv.addEventListener("click", onMonthViewClick);
+		// filtri dell'elenco dei tag: testo (contiene, con piccolo ritardo) e menu dello stato (esatto)
+		monthViewDiv.addEventListener("input", e => {
+			const input = e.target.closest(".month-filter-input");
+			if (!input || !monthState) return;
+			monthState.filters[input.dataset.col] = input.value;
+			clearTimeout(monthState.filterTimer);
+			monthState.filterTimer = setTimeout(applyMonthList, 250);
+		});
+		monthViewDiv.addEventListener("change", e => {
+			const select = e.target.closest(".month-filter-select");
+			if (!select || !monthState) return;
+			monthState.filters[select.dataset.col] = select.value;
+			applyMonthList();
+		});
+	}
+
+	function onMonthViewClick(e) {
+		const monthBtn = e.target.closest(".month-bar-table .tag-month-btn");
+		if (monthBtn) return selectMonth(Number(monthBtn.dataset.month));
+		const sortTh = e.target.closest(".month-sort-th");
+		if (sortTh) return sortMonthList(sortTh.dataset.col);
+		if (e.target.closest(".month-more-btn")) return appendMonthTags();
+		const row = e.target.closest(".month-tag-row");
+		if (row) return toggleMonthTag(row);
+	}
+
+	function selectMonth(i) {
+		const stats = getMonthStats();
+		const listEl = monthViewDiv.querySelector(".month-tag-list");
+		const closing = !!monthState && monthState.selected === i; // secondo clic sullo stesso mese: chiude l'elenco
+		monthViewDiv.querySelectorAll(".month-bar-table .tag-month-btn").forEach(b =>
+			b.classList.toggle("is-selected", !closing && Number(b.dataset.month) === i));
+
+		if (monthState) clearTimeout(monthState.filterTimer);
+		if (closing) {
+			monthState = null;
+			listEl.innerHTML = "";
+			return;
+		}
+
+		const mo = stats.months[i];
+		// tutti i tag, ognuno col numero dei suoi PN deprecati in questo mese; prima quelli colpiti
+		const base = stats.tags.map(t => ({ tag: t.tag, total: t.total, n: t.counts[i] }));
+		base.sort((a, b) => ((a.n > 0 ? 0 : 1) - (b.n > 0 ? 0 : 1)) || listCollator.compare(a.tag, b.tag));
+		monthState = { selected: i, month: mo, base, items: base, shown: 0, filters: {}, sort: null, filterTimer: null };
+
+		const title = stats.hit[i]
+			? `${mo.title}: ${stats.hit[i]} tag con PN deprecati su ${stats.tags.length} (${stats.full[i]} con tutti i PN deprecati)`
+			: `${mo.title}: nessun tag con PN deprecati (${stats.tags.length} tag)`;
+		const sortTh = (col, label, extra) =>
+			`<th class="tag-sort-th month-sort-th${extra || ""}" data-col="${col}" title="Clicca per ordinare">${label}<span class="tag-sort-ind"></span></th>`;
+		// larghezze fisse (vedi il CSS): così l'elenco dei PN aperto sotto un tag, che è molto largo, scorre da solo e non allarga questa tabella
+
+		listEl.innerHTML = `
+			<p class="tag-pn-title">${escapeHtml(title)}<span class="month-tag-filtered"></span></p>
+			<div class="tag-pn-scroll">
+				<table class="cert-detail-table month-tag-table">
+					<thead>
+						<tr class="tag-sort-row">
+							<th class="month-col-open"></th>
+							${sortTh("state", "Stato", " month-col-state")}
+							${sortTh("tag", "Tag", " month-col-tag")}
+							${sortTh("total", "N° PN", " month-col-num")}
+							${sortTh("n", "PN deprecati", " month-col-num")}
+							<th></th>
+						</tr>
+						<tr class="tag-filter-row">
+							<th></th>
+							<th><select class="tag-list-filter-select month-filter-select" data-col="state"><option value="">Tutti</option><option value="Deprecato">Deprecati</option><option value="Parziale">Parziali</option><option value="Non deprecato">Non deprecati</option></select></th>
+							<th><input type="text" class="tag-list-filter-input month-filter-input" data-col="tag" placeholder="Cerca..."></th>
+							<th></th>
+							<th></th>
+							<th></th>
+						</tr>
+					</thead>
+					<tbody></tbody>
+				</table>
+			</div>
+			<button type="button" class="tag-more-btn month-more-btn" hidden></button>
+		`;
+		applyMonthList(); // tiene conto anche del testo già scritto nella casella di ricerca in alto
+	}
+
+	function compareMonthItems(col, dir) {
+		const sign = dir === "desc" ? -1 : 1;
+		const rank = it => it.n === it.total && it.n > 0 ? 0 : (it.n > 0 ? 1 : 2); // deprecato, parziale, non deprecato
+		const byName = (a, b) => listCollator.compare(a.tag, b.tag);
+		if (col === "state") return (a, b) => sign * (rank(a) - rank(b)) || byName(a, b);
+		if (col === "total") return (a, b) => sign * (a.total - b.total) || byName(a, b);
+		if (col === "n") return (a, b) => sign * (a.n - b.n) || byName(a, b);
+		return (a, b) => sign * byName(a, b);
+	}
+
+	// Applica ricerca in alto, filtri dell'intestazione e ordine, e riparte dalla prima pagina
+	function applyMonthList() {
+		const st = monthState;
+		if (!st) return;
+		const globalText = (document.getElementById("global-search")?.value || "").toLowerCase().trim();
+		const tagText = (st.filters.tag || "").toLowerCase().trim();
+		const stateValue = st.filters.state || "";
+
+		let items = st.base.filter(it =>
+			(!globalText || it.tag.toLowerCase().includes(globalText)) &&
+			(!tagText || it.tag.toLowerCase().includes(tagText)) &&
+			(!stateValue || monthTagState(it) === stateValue)
+		);
+		if (st.sort) items = items.slice().sort(compareMonthItems(st.sort.col, st.sort.dir));
+
+		st.items = items;
+		st.shown = 0;
+		appendMonthTags();
+	}
+
+	function sortMonthList(col) {
+		const st = monthState;
+		if (!st) return;
+		const dir = st.sort && st.sort.col === col && st.sort.dir === "asc" ? "desc" : "asc";
+		st.sort = { col, dir };
+		monthViewDiv.querySelectorAll(".month-sort-th").forEach(th => {
+			const current = th.dataset.col === col;
+			th.classList.toggle("is-asc", current && dir === "asc");
+			th.classList.toggle("is-desc", current && dir === "desc");
+		});
+		applyMonthList();
+	}
+
+	function appendMonthTags() {
+		const st = monthState;
+		if (!st) return;
+		const listEl = monthViewDiv.querySelector(".month-tag-list");
+		const tbody = listEl.querySelector(".month-tag-table tbody");
+		const moreBtn = listEl.querySelector(".month-more-btn");
+		if (st.shown === 0) tbody.innerHTML = "";
+
+		const chunk = st.items.slice(st.shown, st.shown + TAG_LIST_PAGE);
+		const rows = chunk.map(item => {
+			const tip = item.n === 0 ? "Nessun PN deprecato" : `${item.n} PN deprecati su ${item.total}`;
+			return `<tr class="month-tag-row" data-tag="${escapeHtml(item.tag)}" title="Clicca per vedere i PN di questo tag">`
+				+ `<td class="month-col-open"><span class="cert-expand-icon">▸</span></td>`
+				+ `<td class="month-col-state"><div class="cert-month-bar ${monthBarClass(item.n, item.total)}" title="${escapeHtml(tip)}"></div></td>`
+				+ `<td>${escapeHtml(item.tag)}</td><td>${item.total}</td><td>${item.n}</td><td></td></tr>`;
+		}).join("");
+		tbody.insertAdjacentHTML("beforeend", rows);
+		if (!st.items.length) {
+			tbody.innerHTML = `<tr><td class="tag-pn-none" colspan="6">Nessun tag corrisponde ai filtri</td></tr>`;
+		}
+
+		st.shown += chunk.length;
+		const remaining = st.items.length - st.shown;
+		moreBtn.hidden = remaining <= 0;
+		moreBtn.textContent = `Mostra altri (${Math.min(TAG_LIST_PAGE, remaining)} di ${remaining} rimasti)`;
+
+		const filteredEl = listEl.querySelector(".month-tag-filtered");
+		if (filteredEl) filteredEl.textContent = st.items.length === st.base.length ? "" : ` — filtrati: ${st.items.length} su ${st.base.length}`;
+	}
+
+	/* Apre o chiude l'elenco dei PN di un tag: lo stesso elenco della scheda Per Tag,
+	 già posizionato sul mese scelto. Si costruisce solo alla prima apertura.*/
+	function toggleMonthTag(row) {
+		let detail = row.nextElementSibling;
+		if (detail && detail.classList.contains("month-tag-detail")) {
+			detail.hidden = !detail.hidden;
+			row.classList.toggle("is-open", !detail.hidden);
+			return;
+		}
+
+		const panel = document.createElement("div");
+		panel.className = "month-tag-panel";
+		panel.dataset.tag = row.dataset.tag;
+		panel._tag = makeTagState(row.dataset.tag);
+		panel.innerHTML = `<div class="tag-pn-list"></div>`;
+		attachTagListHandlers(panel);
+
+		detail = document.createElement("tr");
+		detail.className = "month-tag-detail";
+		const cell = document.createElement("td");
+		cell.colSpan = 6;
+		cell.appendChild(panel);
+		detail.appendChild(cell);
+		row.after(detail);
+		row.classList.add("is-open");
+
+		selectTagMonth(panel, monthState.selected);
+	}
+
 	function setupCustomerDropdown() {
 		const optionsList = document.getElementById("customer-options-list");
 		const btnText = document.getElementById("customer-btn-text");
@@ -896,6 +1176,120 @@
 		}
 	}
 
+	/* ================= Filtri Ref. US Family e Ref. EU Family =================
+	 Stessa struttura del filtro Customer (menu con spunte, ricerca interna,
+	 "Seleziona tutti" / "Azzera"), ognuno applicato alla propria colonna.
+	 Si combinano fra loro e con tutti gli altri filtri (applyCombinedFilters).*/
+	const multiFilters = [
+		{ prefix: "usfamily", column: "REF. US FAMILY", allLabel: "Tutte le Ref. US Family", shortLabel: "Ref. US Family", noneLabel: "Nessuna Ref. US Family trovata" },
+		{ prefix: "eufamily", column: "REF. EU FAMILY", allLabel: "Tutte le Ref. EU Family", shortLabel: "Ref. EU Family", noneLabel: "Nessuna Ref. EU Family trovata" }
+	];
+	multiFilters.forEach(f => {
+		f.selected = new Set();
+		f.container = document.getElementById(f.prefix + "-multiselect");
+		f.available = false; // diventa true quando il file contiene la colonna
+	});
+
+	/* I filtri si vedono solo nella scheda "Per PN Motore" e solo se la colonna
+	 esiste nel file Excel*/
+	function refreshMultiFiltersVisibility() {
+		multiFilters.forEach(f => {
+			if (f.container) f.container.style.display = (f.available && activeView === "pn") ? "" : "none";
+		});
+	}
+
+	function setupMultiFilter(f) {
+		const optionsList = document.getElementById(f.prefix + "-options-list");
+		const btnText = document.getElementById(f.prefix + "-btn-text");
+		const searchInput = document.getElementById(f.prefix + "-search-input");
+		if (!f.container || !optionsList || !btnText) return;
+
+		f.available = certificatiHeaders.includes(f.column);
+		refreshMultiFiltersVisibility();
+		if (!f.available) return;
+
+		f.selected = new Set();
+		if (searchInput) searchInput.value = "";
+
+		const uniqueValues = [...new Set(certificatiTableData.map(d => String(d[f.column] ?? "").trim()))]
+			.filter(Boolean)
+			.sort(listCollator.compare);
+
+		function updateBtnText() {
+			const n = f.selected.size;
+			btnText.textContent = n === 0
+				? f.allLabel
+				: n === 1
+					? [...f.selected][0]
+					: `${f.shortLabel} (${n} selezionate)`;
+		}
+
+		function renderOptions(filterText = "") {
+			const needle = filterText.trim().toLowerCase();
+			const filtered = uniqueValues.filter(v => v.toLowerCase().includes(needle));
+
+			optionsList.innerHTML = filtered.length
+				? filtered.map(v => `<label class="multiselect-option"><input type="checkbox" value="${escapeHtml(v)}" ${f.selected.has(v) ? "checked" : ""}> ${escapeHtml(v)}</label>`).join("")
+				: `<div class="multiselect-empty">${f.noneLabel}</div>`;
+
+			optionsList.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+				cb.onchange = () => {
+					if (cb.checked) f.selected.add(cb.value);
+					else f.selected.delete(cb.value);
+					updateBtnText();
+					applyCombinedFilters();
+				};
+			});
+		}
+
+		renderOptions();
+		updateBtnText();
+
+		if (searchInput) searchInput.oninput = () => renderOptions(searchInput.value);
+
+		const selectAllBtn = document.getElementById(f.prefix + "-select-all");
+		const clearAllBtn = document.getElementById(f.prefix + "-clear-all");
+		if (selectAllBtn) {
+			selectAllBtn.onclick = () => {
+				uniqueValues.forEach(v => f.selected.add(v));
+				renderOptions(searchInput ? searchInput.value : "");
+				updateBtnText();
+				applyCombinedFilters();
+			};
+		}
+		if (clearAllBtn) {
+			clearAllBtn.onclick = () => {
+				f.selected.clear();
+				renderOptions(searchInput ? searchInput.value : "");
+				updateBtnText();
+				applyCombinedFilters();
+			};
+		}
+	}
+
+	// Apertura e chiusura dei menu di questi filtri
+	multiFilters.forEach(f => {
+		const btn = document.getElementById(f.prefix + "-dropdown-btn");
+		const menu = document.getElementById(f.prefix + "-dropdown-menu");
+		if (!btn || !menu || !f.container) return;
+		btn.onclick = () => {
+			menu.classList.toggle("show");
+			f.container.classList.toggle("open");
+		};
+	});
+
+	/* Un solo menu aperto alla volta: un clic fuori da un menu aperto lo chiude.
+	 Il listener è in fase di "cattura" perché il bottone Customer ferma la propagazione
+	 del clic (stopPropagation) e altrimenti non chiuderebbe gli altri menu.*/
+	document.addEventListener("click", e => {
+		document.querySelectorAll(".multiselect-container.open").forEach(c => {
+			if (c.contains(e.target)) return;
+			c.classList.remove("open");
+			const menu = c.querySelector(".multiselect-dropdown");
+			if (menu) menu.classList.remove("show");
+		});
+	}, true);
+
 	const dropdownBtn = document.getElementById("customer-dropdown-btn");
 	const dropdownMenu = document.getElementById("customer-dropdown-menu");
 	const multiselectContainer = document.getElementById("customer-multiselect");
@@ -926,8 +1320,10 @@
 		const colFilterEntries = Object.entries(columnFilters)
 			.filter(([, f]) => f && f.value && f.value.trim())
 			.map(([field, f]) => [field, f.value.trim(), f.value.trim().toLowerCase(), f.exact]);
+		// Ref. US / EU Family: solo i filtri con almeno una voce spuntata
+		const multiActive = multiFilters.filter(f => f.available && f.selected.size);
 
-		if (!globalVal && !selectedCust.length && !colFilterEntries.length) {
+		if (!globalVal && !selectedCust.length && !colFilterEntries.length && !multiActive.length) {
 			return table.clearFilter();
 		}
 
@@ -939,7 +1335,8 @@
 				const cell = String(data[field] ?? "");
 				return exact ? cell.trim() === val : cell.toLowerCase().includes(valLower);
 			});
-			return custMatch && globalMatch && colMatch;
+			const multiMatch = multiActive.every(f => f.selected.has(String(data[f.column] ?? "").trim()));
+			return custMatch && globalMatch && colMatch && multiMatch;
 		});
 	}
 
@@ -947,6 +1344,10 @@
 	let globalSearchTimer = null;
 	document.getElementById("global-search")?.addEventListener("keyup", () => {
 		clearTimeout(globalSearchTimer);
-		globalSearchTimer = setTimeout(() => (activeView === "tag" ? applyTagFilter() : applyCombinedFilters()), 300);
+		globalSearchTimer = setTimeout(() => {
+			if (activeView === "tag") applyTagFilter();
+			else if (activeView === "month") applyMonthList();
+			else applyCombinedFilters();
+		}, 300);
 	});
 });

@@ -52,6 +52,44 @@
 					<div class="multiselect-options" id="customer-options-list"></div>
 				</div>
 			</div>
+
+			<!-- Dropdown Multi-Select Ref. US Family (stesso comportamento del filtro Customer) -->
+			<div class="multiselect-container multiselect-container--compact" id="usfamily-multiselect">
+				<button type="button" class="multiselect-btn" id="usfamily-dropdown-btn">
+					<span id="usfamily-btn-text">Tutte le Ref. US Family</span>
+					<span class="dropdown-arrow">▼</span>
+				</button>
+				<div class="multiselect-dropdown" id="usfamily-dropdown-menu">
+					<div class="multiselect-search">
+						<input type="text" id="usfamily-search-input" placeholder="Cerca Ref. US Family...">
+					</div>
+					<div class="multiselect-actions">
+						<button type="button" id="usfamily-select-all">Seleziona tutti</button>
+						<button type="button" id="usfamily-clear-all">Azzera</button>
+					</div>
+					<!-- Le opzioni a spunta verranno generate dinamicamente da JS -->
+					<div class="multiselect-options" id="usfamily-options-list"></div>
+				</div>
+			</div>
+
+			<!-- Dropdown Multi-Select Ref. EU Family (stesso comportamento del filtro Customer) -->
+			<div class="multiselect-container multiselect-container--compact" id="eufamily-multiselect">
+				<button type="button" class="multiselect-btn" id="eufamily-dropdown-btn">
+					<span id="eufamily-btn-text">Tutte le Ref. EU Family</span>
+					<span class="dropdown-arrow">▼</span>
+				</button>
+				<div class="multiselect-dropdown" id="eufamily-dropdown-menu">
+					<div class="multiselect-search">
+						<input type="text" id="eufamily-search-input" placeholder="Cerca Ref. EU Family...">
+					</div>
+					<div class="multiselect-actions">
+						<button type="button" id="eufamily-select-all">Seleziona tutti</button>
+						<button type="button" id="eufamily-clear-all">Azzera</button>
+					</div>
+					<!-- Le opzioni a spunta verranno generate dinamicamente da JS -->
+					<div class="multiselect-options" id="eufamily-options-list"></div>
+				</div>
+			</div>
 		</div>
 
 		<!-- Barra delle Schede: non più usata col nuovo modello dati
