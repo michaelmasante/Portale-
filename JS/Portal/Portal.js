@@ -5,7 +5,7 @@
         Prossimamente: "LavoriInCorso.html",
         UnireExcell: "UnireFileExcell.html"
     };
-    const PAGE_VERSION = "0.1.0";
+    const PAGE_VERSION = "0.2.0";
 
     function escapeHtml(value) {
         return String(value)

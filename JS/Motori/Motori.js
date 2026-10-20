@@ -18,8 +18,7 @@
 	];
 
 	/* Colonne da leggere da TAG: la chiave + le 3 colonne che formano
-	 il dettaglio mostrato all'apertura della riga. Aggiungi altre
-	 colonne qui se in futuro ti servono anche quelle.*/
+	 il dettaglio mostrato all'apertura della riga.*/
 	const tagAllowedColumns = [
 		TAG_KEY_COLUMN, "VStart", "VEnd", "TagElementDescription"
 	];
