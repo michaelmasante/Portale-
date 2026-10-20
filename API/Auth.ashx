@@ -28,6 +28,8 @@
  *   <appSettings>
  *     <!-- true = chi si registra puo' entrare subito; false (o voce assente) = deve prima essere attivato -->
  *     <add key="RegistrazioneAutomatica" value="false" />
+ *     <!-- SOLO sul PC di sviluppo: entra senza database con questi ruoli (vedi RuoliSviluppo) -->
+ *     <add key="LoginSviluppo" value="Admin" />
  *   </appSettings>
  *
  * Codice scritto in C# 5 (senza interpolazione di stringhe, "?." ecc.) e con le lettere accentate scritte
@@ -334,6 +336,9 @@ public class AuthHandler : IHttpHandler
 
 	private static void Me(HttpContext ctx)
 	{
+		string ruoliSviluppo = RuoliSviluppo(ctx);
+		if (ruoliSviluppo != null) { MeSviluppo(ctx, ruoliSviluppo); return; }
+
 		Dictionary<string, object> d = new Dictionary<string, object>();
 		FormsIdentity id = ctx.User == null ? null : ctx.User.Identity as FormsIdentity;
 		if (id != null && id.IsAuthenticated)
@@ -388,6 +393,45 @@ public class AuthHandler : IHttpHandler
 		{
 			d["authenticated"] = false;
 		}
+		Reply(ctx, d);
+	}
+
+	/*
+	 * Login di sviluppo, per lavorare sul proprio PC senza il database.
+	 * Si attiva con la voce LoginSviluppo nel Web.config (i ruoli da simulare, separati da virgola):
+	 *     <add key="LoginSviluppo" value="Admin" />
+	 * Vale SOLO per le richieste fatte dallo stesso computer che ospita il sito (localhost):
+	 * dagli altri PC il login resta quello vero. Sul server la voce va tolta (lo fa Web.Release.config).
+	 * Restituisce i ruoli da simulare, oppure null se il login di sviluppo non e' attivo.
+	 */
+	private static string RuoliSviluppo(HttpContext ctx)
+	{
+		string ruoli = ConfigurationManager.AppSettings["LoginSviluppo"];
+		if (string.IsNullOrWhiteSpace(ruoli) || !ctx.Request.IsLocal) return null;
+		return ruoli;
+	}
+
+	private const string UtenteSviluppo = "sviluppo";
+
+	private static void MeSviluppo(HttpContext ctx, string ruoliSviluppo)
+	{
+		const string nome = "Sviluppo (locale)";
+		FormsIdentity id = ctx.User == null ? null : ctx.User.Identity as FormsIdentity;
+		if (id == null || !id.IsAuthenticated) SignIn(ctx, UtenteSviluppo, nome); // cookie di accesso, cosi' IIS apre anche le pagine .html
+
+		List<string> ruoli = new List<string>();
+		foreach (string r in ruoliSviluppo.Split(','))
+		{
+			string t = r.Trim();
+			if (t.Length > 0) ruoli.Add(t);
+		}
+
+		Dictionary<string, object> d = new Dictionary<string, object>();
+		d["authenticated"] = true;
+		d["username"] = UtenteSviluppo;
+		d["nome"] = nome;
+		d["ruoli"] = ruoli;
+		d["sviluppo"] = true;
 		Reply(ctx, d);
 	}
 

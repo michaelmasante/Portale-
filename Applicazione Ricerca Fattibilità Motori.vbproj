@@ -146,6 +146,7 @@
     <Content Include="CSS\Motori\Motori.css" />
     <Content Include="CSS\Motori\tabulator.min.css" />
     <Content Include="CSS\Portal\Portale.css" />
+    <Content Include="GestioneUtenti.html" />
     <Content Include="get_files.php" />
     <Content Include="Footer.html" />
     <Content Include="JS\GestioneUtenti\GestioneUtenti.js" />
