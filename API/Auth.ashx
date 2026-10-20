@@ -338,9 +338,51 @@ public class AuthHandler : IHttpHandler
 		FormsIdentity id = ctx.User == null ? null : ctx.User.Identity as FormsIdentity;
 		if (id != null && id.IsAuthenticated)
 		{
-			d["authenticated"] = true;
-			d["username"] = id.Name;
-			d["nome"] = id.Ticket.UserData;
+			// ruoli letti ogni volta dal database: un ruolo dato o tolto vale dalla pagina successiva
+			List<string> ruoli = new List<string>();
+			bool exists = false, active = false;
+			try
+			{
+				using (SqlConnection cn = Open())
+				using (SqlCommand cmd = new SqlCommand(
+					"SELECT u.Attivo, r.Nome FROM dbo.Utenti u " +
+					"LEFT JOIN dbo.UtentiRuoli ur ON ur.UserId = u.Id " +
+					"LEFT JOIN dbo.Ruoli r ON r.Id = ur.RuoloId " +
+					"WHERE u.Username = @u", cn))
+				{
+					cmd.Parameters.Add("@u", SqlDbType.NVarChar, 50).Value = id.Name;
+					using (SqlDataReader r = cmd.ExecuteReader())
+					{
+						while (r.Read())
+						{
+							exists = true;
+							active = r.GetBoolean(0);
+							if (!r.IsDBNull(1)) ruoli.Add(r.GetString(1));
+						}
+					}
+				}
+			}
+			catch (Exception)
+			{
+				// database non raggiungibile: l'utente resta dentro, ma senza ruoli
+				exists = true;
+				active = true;
+				d["avviso"] = "Ruoli non disponibili: database non raggiungibile.";
+			}
+
+			if (!exists || !active)
+			{
+				// utente eliminato o disattivato: esce subito, senza aspettare la fine della sessione
+				FormsAuthentication.SignOut();
+				d["authenticated"] = false;
+			}
+			else
+			{
+				d["authenticated"] = true;
+				d["username"] = id.Name;
+				d["nome"] = id.Ticket.UserData;
+				d["ruoli"] = ruoli;
+			}
 		}
 		else
 		{

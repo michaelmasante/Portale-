@@ -72,3 +72,21 @@
         color: #56596e;
         font-size: 0.9rem;
     }
+
+/* Utente collegato e pulsante Esci, a destra nella barra */
+#header-placeholder .nav-user {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+    #header-placeholder .nav-user[hidden] {
+        display: none;
+    }
+
+#header-placeholder .nav-user-name {
+    color: #ffffff;
+    font-size: 0.95rem;
+    font-weight: 500;
+}

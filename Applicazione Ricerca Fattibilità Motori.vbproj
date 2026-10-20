@@ -139,6 +139,7 @@
     <Content Include="bin\roslyn\VBCSCompiler.exe" />
     <Content Include="Certificati.html" />
     <Content Include="CSS\Footer\Footer.css" />
+    <Content Include="CSS\GestioneUtenti\GestioneUtenti.css" />
     <Content Include="CSS\Header\Header.css" />
     <Content Include="CSS\LavoriInCorso\LavoriInCorso.css" />
     <Content Include="CSS\Login\Login.css" />
@@ -147,6 +148,7 @@
     <Content Include="CSS\Portal\Portale.css" />
     <Content Include="get_files.php" />
     <Content Include="Footer.html" />
+    <Content Include="JS\GestioneUtenti\GestioneUtenti.js" />
     <Content Include="JS\Login\Login.js" />
     <Content Include="LavoriInCorso.html" />
     <Content Include="IMG\LOGHI\Logo.png" />

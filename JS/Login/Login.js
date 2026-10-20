@@ -18,6 +18,12 @@
 	}
 	const target = safeTarget(new URLSearchParams(window.location.search).get("ReturnUrl"));
 
+	/* Già collegato (o login di sviluppo attivo in locale, voce LoginSviluppo nel Web.config): si entra subito */
+	fetch(API + "?action=me", { credentials: "same-origin", cache: "no-store" })
+		.then(res => res.json())
+		.then(d => { if (d.authenticated) window.location.replace(target); })
+		.catch(() => { /* resta la pagina di login */ });
+
 	/* ---- messaggi ---- */
 	function showMessage(text, kind) {
 		message.textContent = text;

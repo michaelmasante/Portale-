@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Gestione utenti</title>
+	<!-- Solo Admin: chi non ha il ruolo torna alla Home. Il blocco vero è in API/GestioneUtenti.ashx -->
+	<meta name="ruoli" content="Admin">
+
+	<!-- Disattiva errore favicon -->
+	<link rel="icon" href="data:,">
+
+	<link rel="stylesheet" href="CSS/GestioneUtenti/GestioneUtenti.css">
+</head>
+<body>
+
+	<!-- Header condivisibile -->
+	<div id="header-placeholder"></div>
+
+	<main class="gu-page">
+		<header class="gu-top">
+			<div>
+				<h1>Gestione utenti</h1>
+				<p class="gu-sub">Attiva gli account e assegna i ruoli. Le modifiche valgono dalla pagina successiva che l'utente apre.</p>
+			</div>
+			<div class="gu-counts" id="gu-counts"></div>
+		</header>
+
+		<div class="gu-toolbar">
+			<input type="search" id="gu-search" placeholder="Cerca per nome utente, nome o email…" autocomplete="off">
+			<div class="gu-filters" role="group" aria-label="Filtro">
+				<button type="button" class="gu-filter is-on" data-filtro="tutti">Tutti</button>
+				<button type="button" class="gu-filter" data-filtro="attesa">In attesa</button>
+				<button type="button" class="gu-filter" data-filtro="bloccati">Bloccati</button>
+			</div>
+		</div>
+
+		<div class="gu-card">
+			<div class="gu-table-wrap">
+				<table class="gu-table">
+					<thead id="gu-head"></thead>
+					<tbody id="gu-body">
+						<tr><td class="gu-empty">Caricamento…</td></tr>
+					</tbody>
+				</table>
+			</div>
+		</div>
+	</main>
+
+	<div class="gu-toast" id="gu-toast" role="status" aria-live="polite" hidden></div>
+
+	<div id="footer-placeholder"></div>
+	<script src="JS/Portal/header-loader.js"></script>
+	<script src="JS/GestioneUtenti/GestioneUtenti.js"></script>
+</body>
+</html>
