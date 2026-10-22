@@ -4,6 +4,9 @@
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<title>TOOL CERTIFICATI</title>
+	<!-- Ruoli che possono aprire questa pagina (separati da virgola, es. "Certificati,Safety").
+	     Vuoto = tutti gli utenti collegati. Admin entra sempre. -->
+	<meta name="ruoli" content="Certificati,Admin">
 
 	<!-- Disattiva errore favicon -->
 	<link rel="icon" href="data:,">
@@ -101,7 +104,7 @@
 	</main>
 	<div id="footer-placeholder"></div>
 	<!-- Script caricatore Header -->
-	<script src="JS/Portal/header-loader.js"></script>
+	<script src="JS/Portal/header-loader.js?v=4"></script>
 	<!-- Script Gestione Tabella Certificati -->
 	<script src="JS/Motori/Motori.js"></script>
 </body>

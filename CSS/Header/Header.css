@@ -73,20 +73,82 @@
         font-size: 0.9rem;
     }
 
-/* Utente collegato e pulsante Esci, a destra nella barra */
+/* Utente collegato e pulsante Esci: sempre in alto a destra nella barra */
 #header-placeholder .nav-user {
-    margin-left: auto;
+    margin-left: auto; /* spinge il blocco all'estremità destra */
     display: flex;
     align-items: center;
-    gap: 14px;
+    gap: 12px;
+    flex: none;
 }
 
     #header-placeholder .nav-user[hidden] {
         display: none;
     }
 
+#header-placeholder .nav-user-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: #3699ff;
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    flex: none;
+}
+
+#header-placeholder .nav-user-text {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.2;
+    text-align: right;
+    order: -1; /* testo a sinistra dell'avatar */
+}
+
 #header-placeholder .nav-user-name {
     color: #ffffff;
     font-size: 0.95rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+#header-placeholder .nav-user-roles {
+    color: #a2a5b9;
+    font-size: 0.75rem;
+    white-space: nowrap;
+}
+
+    #header-placeholder .nav-user-roles:empty {
+        display: none;
+    }
+
+#header-placeholder a.nav-logout,
+#header-placeholder a.nav-logout:link,
+#header-placeholder a.nav-logout:visited {
+    margin-left: 6px;
+    padding: 6px 14px;
+    border: 1px solid #56596e;
+    border-radius: 6px;
+    color: #a2a5b9;
+    font-size: 0.85rem;
     font-weight: 500;
+    text-decoration: none;
+    transition: color 0.2s ease, border-color 0.2s ease;
+}
+
+    #header-placeholder a.nav-logout:hover {
+        color: #ffffff;
+        border-color: #a2a5b9;
+        text-decoration: none;
+    }
+
+/* Schermi stretti: solo avatar ed Esci */
+@media (max-width: 640px) {
+    #header-placeholder .nav-user-text {
+        display: none;
+    }
 }
