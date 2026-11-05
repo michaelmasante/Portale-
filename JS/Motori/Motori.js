@@ -27,7 +27,7 @@
 	 Tutte le altre colonne hanno solo il campo "Cerca...".*/
 	const dropdownColumns = ["Customer Eng.", "Customer", "Tipo Motore", "Omologazione", "ENTE", "PRP", "Status"];
 	// Versione di questa pagina: viene aggiunta al footer condiviso
-	const PAGE_VERSION = "0.2.0";
+	const PAGE_VERSION = "0.5.0";
 
 	/* Il footer viene caricato in modo asincrono dentro #footer-placeholder,
 	 quindi si aspetta che compaia e poi ci si inserisce la versione*/
@@ -172,28 +172,64 @@
 	let tagSheetName = "";        // nome del foglio del file TAG (è una data)
 	let pnGridDiv = null;
 	let tagGridDiv = null;
-	const searchByView = { pn: "", tag: "", month: "" };
+	const searchByView = { pn: "", tag: "", month: "", carica: "", epa: "" };
+
+	/* Shop Order e TAG arrivano dal database (API/Certificati.ashx), caricati dalla scheda "Carica Excel".
+	 Prima si leggevano i file in File/Certificati: loadExcelFile e parseSheet qui sopra non servono più alla pagina.
+	 Il server manda { colonne: [nomi come nel file Excel], righe: [[valori], ...] }: qui diventano
+	 le stesse strutture { headers, tableData } che dava parseSheet, così il resto della pagina non cambia.*/
+	const API_CERTIFICATI = "API/Certificati.ashx";
+
+	function loadFromDb(action) {
+		return nextPaint.then(() => fetch(API_CERTIFICATI + "?action=" + action, { credentials: "same-origin", cache: "no-store" }))
+			.then(res => res.json().catch(() => ({ ok: false, message: `Risposta non valida dal server (HTTP ${res.status}).` })))
+			.catch(() => ({ ok: false, message: "Il server non risponde (" + API_CERTIFICATI + ")." }));
+	}
+
+	function toParsed(data) {
+		const headers = data.colonne || [];
+		const tableData = (data.righe || []).map(row => headers.reduce((acc, h, i) => { acc[h] = row[i] ?? ""; return acc; }, {}));
+		return { headers, tableData };
+	}
+
+	// Pagina senza dati: messaggio, e per chi può caricare il pulsante per andare a "Carica Excel"
+	function showEmptyDb(message) {
+		// il pulsante si vede sempre: chi non ha il ruolo "Certificati Upload" non vede la sezione e il server rifiuta comunque il caricamento
+		gridsWrapper.innerHTML = `<div class="cert-vuoto">${escapeHtml(message)}
+			<button type="button" class="cx-btn cx-btn-primary" id="cert-vai-carica">Vai a Carica Excel</button></div>`;
+		const btn = document.getElementById("cert-vai-carica");
+		btn.onclick = () => {
+			const filters = document.querySelector(".filters-container");
+			if (filters) filters.style.display = "none";
+			gridsWrapper.style.display = "none";
+			if (window.CertificatiCarica) window.CertificatiCarica.mostra();
+		};
+	}
 
 	Promise.all([
-		loadExcelFile(certificatiFilePath),
-		loadExcelFile(tagFilePath)
-	]).then(([certificatiWorkbook, tagWorkbook]) => {
-		const missing = [];
-		if (!certificatiWorkbook) missing.push(certificatiFilePath);
-		if (!tagWorkbook) missing.push(tagFilePath);
+		loadFromDb("shoporder"),
+		loadFromDb("tag")
+	]).then(([shopData, tagData]) => {
+		const failed = [shopData, tagData].find(d => !d || d.ok === false);
+		if (failed) {
+			// anche se i dati non arrivano (database non ancora creato, errore del server) si può andare a Carica Excel
+			showEmptyDb("Dati non disponibili: " + (failed.message || "errore del server") + (failed.detail ? " — " + failed.detail : ""));
+			gridsWrapper.querySelector(".cert-vuoto").style.color = "red";
+			return;
+		}
+		// la scheda "Carica Excel" li usa per il confronto col file, senza riscaricarli
+		window.CertificatiDati = { shoporder: shopData, tag: tagData };
 
-		if (missing.length) {
-			gridsWrapper.innerHTML = `<div style="padding:20px; color:red; font-weight:bold;">File Excel non trovato: ${missing.map(escapeHtml).join(", ")}. Controlla i percorsi in cima a Certificati.js.</div>`;
+		if (!shopData.righe || !shopData.righe.length) {
+			showEmptyDb("Nel database non ci sono ancora Shop Order: vanno caricati i file Excel.");
 			return;
 		}
 
-		// Si prende il primo foglio di ciascun file: non serve sapere il nome del foglio
-		const certificatiSheet = certificatiWorkbook.Sheets[certificatiWorkbook.SheetNames[0]];
-		const tagSheet = tagWorkbook.Sheets[tagWorkbook.SheetNames[0]];
-		tagSheetName = String(tagWorkbook.SheetNames[0] ?? "").trim();
+		// il nome del foglio del file TAG caricato per ultimo (è una data)
+		tagSheetName = String(tagData.foglio ?? "").trim();
 
-		const certificatiParsed = parseSheet(certificatiSheet, certificatiAllowedColumnsMap);
-		const tagParsed = parseSheet(tagSheet, tagAllowedColumnsMap);
+		const certificatiParsed = toParsed(shopData);
+		const tagParsed = toParsed(tagData);
 
 		if (!certificatiParsed.headers.includes(CERTIFICATI_KEY_COLUMN)) {
 			gridsWrapper.innerHTML = `<div style="padding:20px; color:red; font-weight:bold;">Non trovo la colonna chiave "${escapeHtml(CERTIFICATI_KEY_COLUMN)}" nel file Certificati. Controlla il nome dell'intestazione nel file.</div>`;
@@ -473,13 +509,22 @@
 	function createTabs() {
 		if (!tabsContainer) return;
 		tabsContainer.innerHTML = "";
-		[{ id: "pn", label: "Per PN Motore" }, { id: "tag", label: "Per Tag" }, { id: "month", label: "Per Mese" }].forEach(t => {
+		[{ id: "pn", label: "Per PN Motore" }, { id: "tag", label: "Per Tag" }, { id: "month", label: "Per Mese" },
+			{ id: "epa", label: "Tracker EPA" },
+			{ id: "carica", label: "Carica Excel", ruoli: "Certificati Upload" }].forEach(t => {
 			const btn = document.createElement("button");
 			btn.type = "button";
 			btn.className = "tab-btn" + (t.id === activeView ? " active" : "");
 			btn.dataset.view = t.id;
 			btn.textContent = t.label;
 			btn.onclick = () => switchView(t.id);
+			// scheda visibile solo con il ruolo (header-loader.js nasconde gli elementi data-ruoli senza "ruolo-ok")
+			if (t.ruoli) {
+				btn.dataset.ruoli = t.ruoli;
+				const applica = () => { if (window.PortaleUtente) btn.classList.toggle("ruolo-ok", window.PortaleUtente.ha(t.ruoli)); };
+				applica();
+				document.addEventListener("portale:utente", applica);
+			}
 			tabsContainer.appendChild(btn);
 		});
 	}
@@ -493,6 +538,11 @@
 		tabsContainer.querySelectorAll(".tab-btn").forEach(b => b.classList.toggle("active", b.dataset.view === view));
 
 		pnGridDiv.style.display = view === "pn" ? "" : "none";
+		// Carica Excel (CaricaExcel.js) e Tracker EPA (TrackerEpa.js): niente filtri in alto, hanno i loro
+		const filtersBox = document.querySelector(".filters-container");
+		if (filtersBox) filtersBox.style.display = view === "carica" || view === "epa" ? "none" : "";
+		if (window.CertificatiCarica) { if (view === "carica") window.CertificatiCarica.mostra(); else window.CertificatiCarica.nascondi(); }
+		if (window.CertificatiEpa) { if (view === "epa") window.CertificatiEpa.mostra(); else window.CertificatiEpa.nascondi(); }
 		if (view === "tag") ensureTagTable();
 		if (view === "month") ensureMonthView();
 		if (tagGridDiv) tagGridDiv.style.display = view === "tag" ? "" : "none";
@@ -508,7 +558,7 @@
 		refreshMultiFiltersVisibility(); // anche quelli per Ref. US/EU Family
 		// alla prima apertura la tabella dei tag è appena nata (e Tabulator non ha finito di costruirla): niente redraw
 		// la scheda Per Mese non ha una tabella Tabulator da ridisegnare
-		if (!firstTagOpen && view !== "month") (view === "pn" ? table : tagTable).redraw();
+		if (!firstTagOpen && view !== "month" && view !== "carica" && view !== "epa") (view === "pn" ? table : tagTable).redraw();
 	}
 
 	function ensureTagTable() {

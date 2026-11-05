@@ -4,6 +4,9 @@
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<title>TOOL CERTIFICATI</title>
+	<!-- Ruoli che possono aprire questa pagina (separati da virgola, es. "Certificati,Safety").
+	     Vuoto = tutti gli utenti collegati. Admin entra sempre. -->
+	<meta name="ruoli" content="Certificati,Admin">
 
 	<!-- Disattiva errore favicon -->
 	<link rel="icon" href="data:,">
@@ -13,8 +16,16 @@
 	<!-- CSS Personalizzato Motori -->
 	<link rel="stylesheet" href="CSS/Motori/Motori.css">
 
-	<!-- XLSX Library (SheetJS via cdnjs) -->
-	<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+	<!-- CSS della scheda "Carica Excel" -->
+	<link rel="stylesheet" href="CSS/Motori/CaricaExcel.css?v=2">
+	<!-- Legenda dei TAG -->
+	<link rel="stylesheet" href="CSS/Motori/LegendaTag.css?v=1">
+	<!-- Scheda Tracker EPA -->
+	<link rel="stylesheet" href="CSS/Motori/TrackerEpa.css?v=1">
+
+	<!-- XLSX Library (SheetJS 0.18.5): la copia dentro il Portale usata da Safety (dalla rete aziendale cdnjs può essere bloccato).
+	     Serve solo alla scheda "Carica Excel": i dati della pagina arrivano dal database -->
+	<script src="JS/Safety/lib/xlsx-0.18.5.full.min.js"></script>
 
 	<!-- Tabulator JS LOCALE -->
 	<script src="JS/Motori/tabulator.min.js"></script>
@@ -26,6 +37,44 @@
 
 	<main class="container">
 		<h1>TOOL CERTIFICATI</h1>
+
+		<!-- Legenda dei TAG, in alto a destra: si apre e si chiude (il browser ricorda la scelta) -->
+		<details class="tag-legenda" id="tag-legenda">
+			<summary title="Significato dei TAG"><i class="tag-legenda-icona">i</i>Legenda TAG<span class="tag-legenda-freccia">&#9660;</span></summary>
+			<div class="tag-legenda-corpo">
+				<div class="tag-legenda-titolo">Significato dei TAG<button type="button" class="tag-legenda-chiudi" id="tag-legenda-chiudi" title="Chiudi">&times;</button></div>
+				<table>
+					<tr><td><span class="tag-legenda-codice">A</span></td><td>US Family</td></tr>
+					<tr><td><span class="tag-legenda-codice">B</span></td><td>Engine type (first 11 digit)</td></tr>
+					<tr><td><span class="tag-legenda-codice">Mb</span></td><td>US Emission Control System</td></tr>
+					<tr><td><span class="tag-legenda-codice">RA</span></td><td>EU Emission (or 96R)</td></tr>
+					<tr><td><span class="tag-legenda-codice">RB</span></td><td>EU Tractor Certificate</td></tr>
+					<tr><td><span class="tag-legenda-codice">Ua</span></td><td>Customer PN code</td></tr>
+					<tr><td><span class="tag-legenda-codice">H</span></td><td>MY</td></tr>
+					<tr><td><span class="tag-legenda-codice">N</span></td><td>Engine type (complete)</td></tr>
+					<tr><td><span class="tag-legenda-codice">Q</span></td><td>US Power Category</td></tr>
+					<tr><td><span class="tag-legenda-codice">L</span></td><td>US Displacement</td></tr>
+					<tr><td><span class="tag-legenda-codice">O</span></td><td>EU Family</td></tr>
+					<tr><td><span class="tag-legenda-codice">S</span></td><td>EU Power</td></tr>
+					<tr><td><span class="tag-legenda-codice">T</span></td><td>EU Smoke</td></tr>
+					<tr><td><span class="tag-legenda-codice">Ue</span></td><td>FPT PN code</td></tr>
+					<tr><td><span class="tag-legenda-codice">RaCh</span></td><td>China Emission</td></tr>
+					<tr><td><span class="tag-legenda-codice">RaIn</span></td><td>India Emission</td></tr>
+					<tr><td><span class="tag-legenda-codice">R9605</span></td><td>R9605 regulations</td></tr>
+					<tr><td><span class="tag-legenda-codice">OJa</span></td><td>Japanese Emission</td></tr>
+					<tr><td><span class="tag-legenda-codice">R49</span></td><td>R49 regulations</td></tr>
+				</table>
+			</div>
+		</details>
+		<script>
+			(function () {
+				var d = document.getElementById("tag-legenda");
+				try { if (localStorage.getItem("cert_legenda") === "1") d.open = true; } catch (e) {}
+				d.addEventListener("toggle", function () { try { localStorage.setItem("cert_legenda", d.open ? "1" : "0"); } catch (e) {} });
+				document.getElementById("tag-legenda-chiudi").addEventListener("click", function () { d.open = false; });
+				document.addEventListener("keydown", function (e) { if (e.key === "Escape") d.open = false; });
+			})();
+		</script>
 
 		<!-- Contenitore Filtri Rapidi -->
 		<div class="filters-container">
@@ -98,11 +147,51 @@
 
 		<!-- Contenitore per la griglia Tabulator -->
 		<div id="grids-wrapper"></div>
+
+		<!-- ============ TRACKER EPA (la gestisce JS/Motori/TrackerEpa.js) ============ -->
+		<section class="epa-vista" id="epa-view" hidden>
+			<div id="epa-contenuto"></div>
+		</section>
+
+		<!-- ============ CARICA EXCEL (solo ruolo "Certificati Upload" o Admin; la gestisce JS/Motori/CaricaExcel.js) ============ -->
+		<section class="cx-vista" id="cx-carica" data-ruoli="Certificati Upload" hidden>
+			<div class="cx-card">
+				<div class="cx-card-head">Carica Excel</div>
+				<div class="cx-card-body">
+					<p class="cx-testo">
+						Due tipi di file, riconosciuti dalle intestazioni (le colonne si cercano per <strong>nome</strong>, l'ordine non conta):
+					</p>
+					<ul class="cx-lista cx-testo">
+						<li><strong>Shop Order</strong> (Report schedulato Shop order, Estrazione N1 o N2): colonna <code>P/N Motore</code> più
+							Engine code, REF. EU/US FAMILY, Application, Customer Eng., Customer, Tipo Motore, Omologazione, ENTE, PRP, FGF GROUP, Status.
+							I P/N nuovi vengono <strong>aggiunti</strong>, quelli già presenti <strong>aggiornati</strong>; non si cancella niente.</li>
+						<li><strong>TAG</strong>: colonne <code>Element | PartNbrEngineering | VersioneManufacturing | VStart | VEnd | TagElementDescription | TagElementValue</code>.
+							Il file è l'elenco completo: <strong>sostituisce</strong> tutti i TAG nel database.</li>
+						<li><strong>Tracker EPA</strong> (es. STATUS MY27_TERRESTRIAL): colonna <code>EPA FAMILY</code> più stati e settimane EPA/CARB, piani PO..R, RISK, NOTE.
+							Il file è la fotografia dello stato: <strong>sostituisce</strong> il Tracker EPA nel database.</li>
+					</ul>
+					<label class="cx-drop" id="cx-drop">
+						<input type="file" id="cx-file" accept=".xlsx,.xlsm,.xls" hidden>
+						<span class="cx-drop-icona">&#128196;</span>
+						<span id="cx-drop-testo">Trascina qui il file Excel oppure <u>sceglilo dal computer</u></span>
+					</label>
+				</div>
+			</div>
+
+			<div id="cx-analisi"></div>
+
+			<div class="cx-card" id="cx-storico"></div>
+		</section>
 	</main>
+	<div class="cx-toast" id="cx-toast" role="status" aria-live="polite" hidden></div>
 	<div id="footer-placeholder"></div>
 	<!-- Script caricatore Header -->
-	<script src="JS/Portal/header-loader.js"></script>
+	<script src="JS/Portal/header-loader.js?v=5"></script>
 	<!-- Script Gestione Tabella Certificati -->
-	<script src="JS/Motori/Motori.js"></script>
+	<script src="JS/Motori/Motori.js?v=5"></script>
+	<!-- Scheda "Carica Excel" -->
+	<script src="JS/Motori/CaricaExcel.js?v=3"></script>
+	<!-- Scheda "Tracker EPA" -->
+	<script src="JS/Motori/TrackerEpa.js?v=1"></script>
 </body>
 </html>

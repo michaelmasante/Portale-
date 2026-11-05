@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Riparazioni urgenti</title>
+	<!-- Chi puo' aprire la pagina (uno di questi ruoli; Admin entra sempre). Gli stessi ruoli sono in API/RepairTracker.ashx.
+	     "RUO <area>" = un ruolo per ogni area: se si aggiunge un'area, aggiungere qui anche il suo ruolo RUO -->
+	<meta name="ruoli" content="Riparazioni,Manutentori,Magazzino,TeamRicambi,RUO,RUO NEF,RUO I&amp;M,RUO CAMBI,RUO PONTI,RUO ePWT,RUO COMPRENSORIO,Admin Repair">
+
+	<!-- Disattiva errore favicon -->
+	<link rel="icon" href="data:,">
+
+	<!-- Icone (Bootstrap Icons): se non si caricano la pagina funziona lo stesso, senza icone -->
+	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css">
+	<link rel="stylesheet" href="CSS/RepairTracker/RepairTracker.css?v=6">
+	<!-- Tema: scuro di base; se l'utente ha scelto il chiaro (salvato nel browser) lo si applica subito, prima di disegnare la pagina -->
+	<script>try { if (localStorage.getItem("rt_tema") === "chiaro") document.documentElement.setAttribute("data-tema", "chiaro"); } catch (e) {}</script>
+</head>
+<body>
+
+	<!-- Header condiviso del Portale -->
+	<div id="header-placeholder"></div>
+
+	<main class="rt-page">
+
+		<!-- Menu interno. data-ruoli-rt: chi vede la voce (Admin vede tutto). Nessun attributo = tutti -->
+		<nav class="rt-nav" id="rt-nav">
+			<a href="#/dashboard" data-vista="dashboard"><i class="bi bi-speedometer2"></i>Dashboard</a>
+			<a href="#/fornitori" data-vista="fornitori"><i class="bi bi-graph-up"></i>Analisi fornitori</a>
+			<a href="#/magazzino" data-vista="magazzino" data-ruoli-rt="Magazzino"><i class="bi bi-building"></i>Richieste magazzino<span class="rt-count" data-coda="magazzino" hidden></span></a>
+			<a href="#/ricambi" data-vista="ricambi" data-ruoli-rt="TeamRicambi"><i class="bi bi-box-seam"></i>Richieste ricambi<span class="rt-count" data-coda="ricambi" hidden></span></a>
+			<a href="#/ruo" data-vista="ruo" data-ruoli-rt="RUO" title="Pratiche in attesa di approvazione delle tue aree"><i class="bi bi-clipboard-check"></i>Coda RUO<span class="rt-count" data-coda="ruo" hidden></span></a>
+			<a href="#/nuova" data-vista="nuova" data-ruoli-rt="Manutentori,TeamRicambi"><i class="bi bi-plus-circle"></i>Nuova richiesta</a>
+			<a href="#/gestione" data-vista="gestione" data-ruoli-rt="Admin Repair"><i class="bi bi-sliders"></i>Gestione</a>
+			<button type="button" class="rt-tema" id="rt-tema"></button>
+		</nav>
+
+		<div class="rt-loading" id="rt-loading"><span class="rt-spinner"></span>Caricamento…</div>
+		<div class="rt-alert rt-alert-danger" id="rt-errore" hidden></div>
+
+		<!-- ============ DASHBOARD ============ -->
+		<section class="rt-vista" data-vista="dashboard" hidden>
+			<div class="rt-head">
+				<div class="rt-head-left">
+					<h1><i class="bi bi-speedometer2"></i>Dashboard riparazioni urgenti</h1>
+					<div class="rt-search">
+						<i class="bi bi-search"></i>
+						<input type="text" id="rt-ricerca" placeholder="Cerca in tutti i campi..." autocomplete="off">
+						<button type="button" class="rt-search-clear" id="rt-ricerca-pulisci" title="Pulisci ricerca" hidden><i class="bi bi-x-lg"></i></button>
+					</div>
+					<button type="button" class="rt-btn rt-btn-outline rt-btn-sm" data-azione="reset" hidden><i class="bi bi-x-circle"></i>Reset filtri</button>
+				</div>
+				<button type="button" class="rt-btn rt-btn-primary rt-btn-sm" id="rt-export"><i class="bi bi-file-earmark-excel"></i>Esporta Excel</button>
+			</div>
+
+			<!-- KPI: un click filtra la tabella, un secondo click toglie il filtro -->
+			<div class="rt-kpis">
+				<button type="button" class="rt-kpi" data-colore=""><strong data-kpi="tutti">0</strong><span>Totale richieste</span></button>
+				<button type="button" class="rt-kpi kpi-grey" data-colore="grey"><strong data-kpi="grey">0</strong><span>In corso</span></button>
+				<button type="button" class="rt-kpi kpi-orange" data-colore="orange"><strong data-kpi="orange">0</strong><span>Attesa RUO</span></button>
+				<button type="button" class="rt-kpi kpi-green" data-colore="green"><strong data-kpi="green">0</strong><span>Approvate</span></button>
+				<button type="button" class="rt-kpi kpi-red" data-colore="red"><strong data-kpi="red">0</strong><span>Rifiutate</span></button>
+				<button type="button" class="rt-kpi kpi-ritardo" data-colore="ritardo"><strong data-kpi="ritardo">0</strong><span>Pezzi in ritardo</span></button>
+			</div>
+			<div class="rt-legenda" aria-hidden="true">
+				<span><span class="rt-dot dot-grey"></span>In corso, prima del RUO</span>
+				<span><span class="rt-dot dot-orange"></span>Tocca al RUO</span>
+				<span><span class="rt-dot dot-green"></span>Approvata</span>
+				<span><span class="rt-dot dot-red"></span>Rifiutata</span>
+				<span><span class="rt-quadro" style="background:var(--row-ritardo);box-shadow:inset 3px 0 0 var(--danger)"></span>Pezzo in ritardo</span>
+				<span><span class="rt-quadro" style="background:var(--row-rientrata);box-shadow:inset 3px 0 0 var(--success)"></span>Rientrata, manca la chiusura</span>
+			</div>
+
+			<div class="rt-card"><div class="rt-table-wrap" data-tabella></div></div>
+		</section>
+
+		<!-- ============ RICHIESTE MAGAZZINO / RICAMBI (stessa tabella, solo gli stati di competenza) ============ -->
+		<section class="rt-vista" data-vista="magazzino" hidden>
+			<div class="rt-head">
+				<div class="rt-head-left">
+					<h1><i class="bi bi-building"></i>Richieste magazzino</h1>
+					<button type="button" class="rt-btn rt-btn-outline rt-btn-sm" data-azione="reset" hidden><i class="bi bi-x-circle"></i>Reset filtri</button>
+				</div>
+			</div>
+			<div class="rt-card"><div class="rt-table-wrap" data-tabella></div></div>
+		</section>
+
+		<section class="rt-vista" data-vista="ricambi" hidden>
+			<div class="rt-head">
+				<div class="rt-head-left">
+					<h1><i class="bi bi-box-seam"></i>Richieste ricambi</h1>
+					<button type="button" class="rt-btn rt-btn-outline rt-btn-sm" data-azione="reset" hidden><i class="bi bi-x-circle"></i>Reset filtri</button>
+				</div>
+			</div>
+			<div class="rt-card"><div class="rt-table-wrap" data-tabella></div></div>
+		</section>
+
+		<!-- ============ CODA RUO ============ -->
+		<section class="rt-vista" data-vista="ruo" hidden>
+			<div class="rt-head">
+				<h1><i class="bi bi-clipboard-check"></i><span id="rt-ruo-titolo">Coda approvazioni RUO</span></h1>
+			</div>
+			<div class="rt-alert rt-alert-success" id="rt-ruo-vuota" hidden><i class="bi bi-check-circle"></i>Nessuna richiesta in attesa di approvazione.</div>
+			<div class="rt-ruo-grid" id="rt-ruo-lista"></div>
+		</section>
+
+		<!-- ============ NUOVA RICHIESTA ============ -->
+		<section class="rt-vista" data-vista="nuova" hidden>
+			<div class="rt-head">
+				<div class="rt-head-left">
+					<a href="#/dashboard" class="rt-btn rt-btn-outline rt-btn-sm rt-back" title="Indietro"><svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M15 8a.5.5 0 0 0-.5-.5H2.707l3.147-3.146a.5.5 0 1 0-.708-.708l-4 4a.5.5 0 0 0 0 .708l4 4a.5.5 0 0 0 .708-.708L2.707 8.5H14.5A.5.5 0 0 0 15 8"/></svg></a>
+					<h1><i class="bi bi-plus-circle"></i>Nuova richiesta</h1>
+				</div>
+			</div>
+			<div class="rt-alert rt-alert-danger" id="rt-nuova-errore" hidden></div>
+			<div class="rt-card rt-card-pad">
+				<!-- campi generati da JS (stessi della fase "Manutentori") -->
+				<div class="rt-form rt-form-3" id="rt-nuova-form"></div>
+				<div class="rt-actions rt-actions-end">
+					<a href="#/dashboard" class="rt-btn rt-btn-outline">Annulla</a>
+					<button type="button" class="rt-btn rt-btn-primary" id="rt-nuova-invia"><i class="bi bi-check-circle"></i>Conferma e invia a Magazzino</button>
+				</div>
+			</div>
+		</section>
+
+		<!-- ============ DETTAGLIO PRATICA ============ -->
+		<section class="rt-vista" data-vista="pratica" hidden>
+			<div class="rt-head">
+				<div class="rt-head-left">
+					<a href="#/dashboard" class="rt-btn rt-btn-outline rt-btn-sm rt-back" id="rt-pratica-indietro" title="Indietro"><svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M15 8a.5.5 0 0 0-.5-.5H2.707l3.147-3.146a.5.5 0 1 0-.708-.708l-4 4a.5.5 0 0 0 0 .708l4 4a.5.5 0 0 0 .708-.708L2.707 8.5H14.5A.5.5 0 0 0 15 8"/></svg></a>
+					<h1><i class="bi bi-file-text"></i>Dettaglio riparazione</h1>
+				</div>
+			</div>
+			<!-- riepilogo, una card per fase, storico: generati da JS -->
+			<div id="rt-pratica"></div>
+		</section>
+
+		<!-- ============ GESTIONE (Admin Repair): budget mensile delle aree e ruoli del Repair Tracker ============ -->
+		<section class="rt-vista rt-gest" data-vista="gestione" hidden>
+			<div class="rt-head">
+				<h1><i class="bi bi-sliders"></i>Gestione Repair Tracker</h1>
+			</div>
+			<div class="rt-tabs" role="tablist">
+				<button type="button" class="rt-tab is-on" data-tab="budget">Budget mensile</button>
+				<button type="button" class="rt-tab" data-tab="utenti">Utenti e ruoli</button>
+			</div>
+
+			<div data-pannello="budget">
+				<p class="rt-gest-nota">Budget che ogni area ha a disposizione nel mese. Quando il RUO approva una pratica, il suo preventivo si scala dal budget dell'area nel mese dell'approvazione.</p>
+				<div class="rt-gest-barra">
+					<label for="rt-budget-mese">Mese</label>
+					<input type="month" id="rt-budget-mese">
+					<button type="button" class="rt-btn rt-btn-primary rt-btn-sm" id="rt-budget-salva"><i class="bi bi-check-circle"></i>Salva budget</button>
+				</div>
+				<div class="rt-card"><div class="rt-table-wrap">
+					<table class="rt-table">
+						<thead><tr><th>Area</th><th>Budget del mese (€)</th><th>Approvato</th><th>Disponibile</th><th>Pratiche approvate</th></tr></thead>
+						<tbody id="rt-budget-tabella"><tr><td colspan="5" class="rt-vuoto">Caricamento…</td></tr></tbody>
+					</table>
+				</div></div>
+			</div>
+
+			<div data-pannello="utenti" hidden>
+				<p class="rt-gest-nota">Qui si danno e tolgono solo i ruoli del Repair Tracker: gli altri ruoli del Portale non si vedono e non cambiano. Ogni spunta si salva subito. Attivare un utente nuovo resta compito dell'amministratore (Gestione utenti del Portale).</p>
+				<div class="rt-gest-barra">
+					<input type="search" id="rt-utenti-cerca" placeholder="Cerca per nome o nome utente…" autocomplete="off">
+				</div>
+				<div class="rt-card"><div class="rt-table-wrap">
+					<table class="rt-table">
+						<thead id="rt-utenti-testa"></thead>
+						<tbody id="rt-utenti-tabella"><tr><td class="rt-vuoto">Caricamento…</td></tr></tbody>
+					</table>
+				</div></div>
+			</div>
+		</section>
+
+		<!-- ============ ANALISI FORNITORI ============ -->
+		<section class="rt-vista" data-vista="fornitori" hidden>
+			<div class="rt-head">
+				<h1><i class="bi bi-graph-up"></i>Analisi fornitori</h1>
+			</div>
+			<div class="rt-alert rt-alert-success" id="rt-fornitori-vuota" hidden><i class="bi bi-info-circle"></i>Nessun dato fornitore disponibile per l'analisi.</div>
+			<div id="rt-fornitori-dati">
+				<div class="rt-fase">
+					<h2 class="rt-fase-titolo"><i class="bi bi-clock-history"></i>Tempo promesso vs effettivo</h2>
+					<div class="rt-chart rt-chart-large"><canvas id="rt-chart-tempi"></canvas></div>
+				</div>
+				<div class="rt-fase">
+					<h2 class="rt-fase-titolo"><i class="bi bi-graph-up-arrow"></i>Andamento ritardi nel tempo (top 5)</h2>
+					<div class="rt-chart"><canvas id="rt-chart-andamento"></canvas></div>
+				</div>
+				<div class="rt-card">
+					<div class="rt-table-wrap">
+						<table class="rt-table">
+							<thead>
+								<tr>
+									<th>Fornitore</th>
+									<th>N. Pratiche</th>
+									<th>Tempo promesso medio</th>
+									<th>Tempo effettivo medio</th>
+									<th>Puntualità</th>
+								</tr>
+							</thead>
+							<tbody id="rt-fornitori-tabella"></tbody>
+						</table>
+					</div>
+				</div>
+			</div>
+		</section>
+
+	</main>
+
+	<div class="rt-toast" id="rt-toast" role="status" aria-live="polite" hidden></div>
+
+	<div id="footer-placeholder"></div>
+
+	<!-- Grafici (Analisi fornitori) ed export Excel -->
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+
+	<script src="JS/Portal/header-loader.js?v=4"></script>
+	<script src="JS/RepairTracker/RepairTracker.js?v=7"></script>
+</body>
+</html>

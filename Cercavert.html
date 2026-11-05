@@ -4,6 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Tool per Cercavert Excell</title>
+<!-- Ruoli che possono aprire questa pagina (separati da virgola, es. "Certificati,Safety").
+     Vuoto = tutti gli utenti collegati. Admin entra sempre. -->
+<meta name="ruoli" content="">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -196,5 +199,7 @@ $('dl').addEventListener('click',async()=>{
   }catch(e){showErr('Download non disponibile in questa vista.')}
 });
 </script>
+<!-- Login e ruoli (meta name="ruoli" qui sopra) -->
+<script src="JS/Portal/header-loader.js?v=4"></script>
 </body>
 </html>

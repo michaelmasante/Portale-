@@ -1,4 +1,5 @@
-﻿<link rel="stylesheet" type="text/css" href="CSS/Header/Header.css">
+﻿<!-- ?v=4: cambiarlo quando si modifica Header.css, così i browser non usano la copia vecchia -->
+<link rel="stylesheet" type="text/css" href="CSS/Header/Header.css?v=4">
 
 <nav class="main-nav">
 	<div class="nav-brand">
@@ -13,9 +14,13 @@
 		<span class="nav-divider" data-ruoli="Admin">|</span>
 		<a href="GestioneUtenti.html" class="nav-link" data-ruoli="Admin">Gestione utenti</a>
 	</div>
-	<!-- Utente collegato e Esci: compilati da header-loader.js -->
+	<!-- Utente collegato (in alto a destra) e Esci: compilati da header-loader.js -->
 	<div class="nav-user" id="nav-user" hidden>
-		<span class="nav-user-name" id="nav-user-name"></span>
-		<a href="#" class="nav-link" id="nav-logout">Esci</a>
+		<span class="nav-user-avatar" id="nav-user-avatar" aria-hidden="true"></span>
+		<span class="nav-user-text">
+			<span class="nav-user-name" id="nav-user-name"></span>
+			<span class="nav-user-roles" id="nav-user-roles"></span>
+		</span>
+		<a href="#" class="nav-logout" id="nav-logout">Esci</a>
 	</div>
 </nav>

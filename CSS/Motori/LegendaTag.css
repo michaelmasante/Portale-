@@ -1,0 +1,149 @@
+/* ===== Certificati: legenda dei TAG (in alto a destra, si apre e si chiude) ===== */
+main.container {
+	position: relative;
+}
+
+.tag-legenda {
+	position: absolute;
+	top: 22px;
+	right: 0;
+	z-index: 60;
+	font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+	/* pulsante */
+	.tag-legenda > summary {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 8px 14px;
+		border-radius: 20px;
+		background: #3f4254;
+		color: #fff;
+		font-size: .9rem;
+		font-weight: 600;
+		cursor: pointer;
+		list-style: none;
+		user-select: none;
+		box-shadow: 0 2px 8px rgba(0,0,0,.15);
+		transition: background .15s ease;
+	}
+
+		.tag-legenda > summary::-webkit-details-marker {
+			display: none;
+		}
+
+		.tag-legenda > summary:hover {
+			background: #2f3142;
+		}
+
+		.tag-legenda > summary:focus-visible {
+			outline: 2px solid #3699FF;
+			outline-offset: 2px;
+		}
+
+.tag-legenda-icona {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 20px;
+	height: 20px;
+	border-radius: 50%;
+	background: #ce201b;
+	font-size: .8rem;
+	font-style: normal;
+}
+
+.tag-legenda-freccia {
+	font-size: .7rem;
+	opacity: .8;
+	transition: transform .2s ease;
+}
+
+.tag-legenda[open] .tag-legenda-freccia {
+	transform: rotate(180deg);
+}
+
+/* pannello */
+.tag-legenda-corpo {
+	position: absolute;
+	top: calc(100% + 8px);
+	right: 0;
+	width: 340px;
+	max-height: 70vh;
+	overflow-y: auto;
+	background: #fff;
+	border: 1px solid #E4E6EF;
+	border-radius: 10px;
+	box-shadow: 0 10px 30px rgba(24,28,50,.18);
+	animation: tag-legenda-apri .15s ease-out;
+}
+
+@keyframes tag-legenda-apri {
+	from { opacity: 0; transform: translateY(-6px); }
+	to { opacity: 1; transform: none; }
+}
+
+.tag-legenda-titolo {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 10px 14px;
+	border-bottom: 1px solid #E4E6EF;
+	background: #F7F8FA;
+	font-size: .85rem;
+	font-weight: 600;
+	color: #3f4254;
+	position: sticky;
+	top: 0;
+}
+
+.tag-legenda-chiudi {
+	border: none;
+	background: none;
+	font-size: 1.1rem;
+	line-height: 1;
+	color: #7E8299;
+	cursor: pointer;
+	padding: 2px 4px;
+}
+
+	.tag-legenda-chiudi:hover {
+		color: #181C32;
+	}
+
+.tag-legenda table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: .86rem;
+}
+
+.tag-legenda td {
+	padding: 6px 14px;
+	border-bottom: 1px solid #F0F1F5;
+	color: #181C32;
+}
+
+.tag-legenda tr:last-child td {
+	border-bottom: none;
+}
+
+.tag-legenda tr:hover td {
+	background: #F7F8FA;
+}
+
+.tag-legenda td:first-child {
+	width: 70px;
+}
+
+.tag-legenda-codice {
+	display: inline-block;
+	min-width: 38px;
+	padding: 2px 8px;
+	border-radius: 6px;
+	background: #FDECEC;
+	color: #ce201b;
+	font-family: Consolas, "Courier New", monospace;
+	font-weight: 700;
+	text-align: center;
+}

@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Safety</title>
+	<!-- Chi puo' aprire la pagina (uno di questi ruoli; Admin entra sempre). Gli stessi ruoli sono in API/Safety.ashx.
+	     "Safety" vede tabelle e presentazione; "Safety Upload" puo' anche caricare il file Excel. -->
+	<meta name="ruoli" content="Safety,Safety Upload">
+
+	<link rel="icon" href="data:,">
+	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css">
+	<link rel="stylesheet" href="CSS/Safety/Safety.css?v=3">
+	<!-- Tema: scuro di base; se l'utente ha scelto il chiaro (salvato nel browser) lo si applica subito -->
+	<script>try { if (localStorage.getItem("sf_tema") === "chiaro") document.documentElement.setAttribute("data-tema", "chiaro"); } catch (e) {}</script>
+</head>
+<body>
+
+	<div id="header-placeholder"></div>
+
+	<div class="sf-app">
+
+		<!-- ============ MENU LATERALE ============ -->
+		<aside class="sf-side">
+			<div class="sf-side-caption">Menu</div>
+			<nav class="sf-menu" id="sf-menu">
+				<a href="#" data-vista="wh"><i class="bi bi-briefcase"></i><span>Worked Hours</span></a>
+				<a href="#" data-vista="lti"><i class="bi bi-people"></i><span>Total LTI</span></a>
+				<a href="#" data-vista="days" data-solo="MFG"><i class="bi bi-layers"></i><span>Lost Days</span></a>
+				<a href="#" data-vista="presentazione"><i class="bi bi-bar-chart-line"></i><span>Presentazione</span></a>
+				<a href="#" data-vista="carica" data-ruoli="Safety Upload"><i class="bi bi-cloud-arrow-up"></i><span>Carica Excel</span></a>
+			</nav>
+			<div class="sf-side-info" id="sf-ultimo"></div>
+		</aside>
+
+		<main class="sf-main">
+
+			<!-- ============ TITOLO + PERIMETRO ============ -->
+			<header class="sf-top">
+				<h1>Q&amp;O EEH&amp;S - SAFETY</h1>
+				<div class="sf-perimetro" role="group" aria-label="Perimetro">
+					<button type="button" data-perimetro="MFG">Manufacturing</button>
+					<button type="button" data-perimetro="NMFG">Non-Manufacturing</button>
+				</div>
+				<button type="button" class="sf-tema" id="sf-tema"></button>
+			</header>
+
+			<div class="sf-loading" id="sf-loading"><span class="sf-spinner"></span>Caricamento…</div>
+			<div class="sf-alert sf-alert-danger" id="sf-errore" hidden></div>
+
+			<!-- ============ TABELLE (Worked Hours / Total LTI / Lost Days) ============ -->
+			<section class="sf-vista" data-vista="tabelle" hidden>
+				<div class="sf-bar">
+					<div class="sf-bar-title">Tabelle</div>
+					<span class="sf-bar-crumb" id="sf-crumb"></span>
+					<div class="sf-tabs" id="sf-aree"></div>
+					<span class="sf-bar-note"><i class="bi bi-lock"></i>Sola lettura · le spunte scelgono le location della presentazione</span>
+				</div>
+				<div id="sf-tabelle"></div>
+			</section>
+
+			<!-- ============ PRESENTAZIONE ============ -->
+			<section class="sf-vista" data-vista="presentazione" hidden>
+				<div class="sf-bar">
+					<div class="sf-bar-title">Presentazione</div>
+					<label class="sf-inline">Mese del report
+						<select id="sf-mese"></select>
+					</label>
+					<button type="button" class="sf-btn sf-btn-primary sf-bar-right" id="sf-export"><i class="bi bi-file-earmark-ppt"></i>Esporta PowerPoint</button>
+				</div>
+
+				<div class="sf-card sf-opzioni">
+					<div class="sf-opzioni-grid">
+						<label class="sf-campo sf-span-6">Titolo copertina<input type="text" id="sf-cover-titolo" autocomplete="off"></label>
+						<label class="sf-campo sf-span-3">Sottotitolo<input type="text" id="sf-cover-sotto" autocomplete="off"></label>
+						<label class="sf-campo sf-span-3">Data<input type="text" id="sf-cover-data" autocomplete="off"></label>
+						<label class="sf-campo sf-span-6">Note "Perimeter" (una riga per punto)<textarea id="sf-note" rows="4"></textarea></label>
+						<div class="sf-campo sf-span-6">
+							<span>Immagine copertina</span>
+							<div class="sf-riga">
+								<label class="sf-btn sf-btn-outline sf-btn-sm"><i class="bi bi-image"></i>Cambia immagine<input type="file" id="sf-cover-file" accept="image/png,image/jpeg" hidden></label>
+								<button type="button" class="sf-btn sf-btn-outline sf-btn-sm" id="sf-cover-reset">Immagine standard</button>
+								<button type="button" class="sf-btn sf-btn-outline sf-btn-sm" id="sf-testi-reset">Testi standard</button>
+							</div>
+							<small class="sf-muted">Titoli, note e immagine valgono solo per questo export (non si salvano nel database).</small>
+						</div>
+					</div>
+				</div>
+
+				<div class="sf-alert sf-alert-info" id="sf-esclusi-info" hidden></div>
+				<div class="sf-alert sf-alert-warning" id="sf-avvisi-report" hidden></div>
+				<div class="sf-slides" id="sf-slides"></div>
+			</section>
+
+			<!-- ============ CARICA EXCEL ============ -->
+			<section class="sf-vista" data-vista="carica" hidden>
+				<div class="sf-bar">
+					<div class="sf-bar-title">Carica Excel</div>
+					<span class="sf-bar-crumb">database_x_tool_web_calcolo_MFG_e_NMFG.xlsx</span>
+				</div>
+
+				<div class="sf-card">
+					<div class="sf-card-body">
+						<p class="sf-testo">
+							Il file deve avere un foglio <strong>MFG</strong> e/o un foglio <strong>NMFG</strong>. In ogni foglio, uno sotto l'altro, i blocchi
+							<em>Total Worked Hours</em>, <em>Total N. of LTI - WR</em> e (solo MFG) <em>Total N. of days lost due to LTI - WR</em>,
+							ognuno con la riga d'intestazione <code>Location Name | Parameter Name | Jan-2025 … Dec-2026</code>.
+						</p>
+						<p class="sf-testo">
+							Per ogni perimetro, parametro e anno presente nel file, i dati nel database vengono <strong>sostituiti</strong> da quelli del file.
+							Le celle vuote restano vuote (mese non ancora disponibile). La riga TOT serve solo come controllo.
+						</p>
+						<label class="sf-drop" id="sf-drop">
+							<input type="file" id="sf-file" accept=".xlsx,.xlsm,.xls" hidden>
+							<i class="bi bi-file-earmark-excel"></i>
+							<span id="sf-drop-testo">Trascina qui il file Excel oppure <u>sceglilo dal computer</u></span>
+						</label>
+					</div>
+				</div>
+
+				<div id="sf-analisi"></div>
+			</section>
+
+		</main>
+	</div>
+
+	<div class="sf-toast" id="sf-toast" role="status" aria-live="polite" hidden></div>
+
+	<div id="footer-placeholder"></div>
+
+	<!-- Librerie dentro il Portale (niente CDN: dalla rete aziendale cdnjs può essere bloccato):
+	     Chart.js 3.9.1 (grafici), PptxGenJS 3.12.0 (PowerPoint), SheetJS 0.18.5 (lettura Excel) -->
+	<script src="JS/Safety/lib/chart-3.9.1.min.js"></script>
+	<script src="JS/Safety/lib/pptxgen-3.12.0.bundle.js"></script>
+	<script src="JS/Safety/lib/xlsx-0.18.5.full.min.js"></script>
+
+	<script src="JS/Portal/header-loader.js?v=5"></script>
+	<script src="JS/Safety/SafetyCalcoli.js?v=3"></script>
+	<script src="JS/Safety/SafetyReport.js?v=3"></script>
+	<script src="JS/Safety/Safety.js?v=3"></script>
+</body>
+</html>
