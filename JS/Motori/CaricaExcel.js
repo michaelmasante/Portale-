@@ -1,20 +1,7 @@
-/* ============ Certificati: Carica Excel ============
- Scheda "Carica Excel" della pagina Certificati (solo ruolo "Certificati Upload" o Admin), come in Safety:
- il file viene letto nel browser (SheetJS), controllato, confrontato col database e poi inviato
- ad API/Certificati.ashx (action=carica), che scrive tutto in un'unica transazione.
-
- Il tipo di file si riconosce dalle intestazioni:
-   - Shop Order (colonna "P/N Motore"): si AGGIUNGONO i P/N nuovi e si AGGIORNANO quelli cambiati.
-     Non si cancella niente: i P/N che nel file non ci sono restano come sono.
-   - TAG (colonne "Element" e "TagElementDescription"): il file e' l'elenco completo e SOSTITUISCE tutti i TAG.
-
- Le colonne si cercano per NOME, non per lettera: i due file Shop Order (Estrazione N1 e N2) hanno le stesse
- colonne in posizioni diverse. La riga di intestazione e' quella, fra le prime 30, con piu' nomi riconosciuti
- (nei file Shop Order e' la terza: sopra ci sono titolo e gruppi). Le altre colonne del file si ignorano.
- Le colonne e le lunghezze massime sono le stesse di API/Certificati.ashx: se si cambiano, cambiarle in tutti e due.*/
 (function () {
 	const API = "API/Certificati.ashx";
 
+	// Colonne e lunghezze: tenere uguali in API/Certificati.ashx
 	const TIPI = {
 		shoporder: {
 			nome: "Shop Order",
@@ -27,12 +14,10 @@
 		tag: {
 			nome: "TAG",
 			chiave: "Element",
-			// 0 = data
 			colonne: { "Element": 255, "PartNbrEngineering": 255, "VersioneManufacturing": 255, "VStart": 0, "VEnd": 0,
 				"TagElementDescription": 255, "TagElementValue": 255 },
 			obbligatorie: ["Element", "VStart", "VEnd", "TagElementDescription"]
 		},
-		// Tracker EPA: riconosciuto dalla colonna "EPA FAMILY"; il file ha due righe di intestazione e si legge con leggiEpa
 		epa: {
 			nome: "Tracker EPA",
 			chiave: "Famiglia",
@@ -43,9 +28,6 @@
 		}
 	};
 
-	/* Tracker EPA: per ogni campo i nomi di colonna accettati (in minuscolo, senza spazi né simboli:
-	 "EPA \nSUB DATE\n[ WK ]" diventa "epasubdatewk"). Le colonne che non sono qui (piani PO09R, PO10R...,
-	 PREVIOUS PLANNING) finiscono nel campo Dati, in JSON.*/
 	const NOMI_EPA = {
 		Famiglia: ["epafamily"],
 		Ordine: ["id"],
@@ -100,8 +82,6 @@
 		return m ? `${m[3]}/${m[2]}/${m[1]} ${m[4]}` : String(s || "");
 	}
 
-	/* ================= lettura del file ================= */
-
 	function leggiFileExcel(file) {
 		return new Promise((res, rej) => {
 			if (!window.XLSX) { rej(new Error("La libreria per leggere i file Excel (SheetJS) non si è caricata.")); return; }
@@ -115,7 +95,6 @@
 		});
 	}
 
-	// Cerca, foglio per foglio, la riga di intestazione e il tipo di file
 	function trovaIntestazione(wb) {
 		let best = null;
 		for (const nomeFoglio of wb.SheetNames) {
@@ -133,12 +112,11 @@
 					if (!best || trovate.length > best.trovate.length) best = { tipo, foglio: nomeFoglio, righe, riga: i, trovate };
 				}
 			}
-			if (best) break; // primo foglio con un'intestazione riconosciuta
+			if (best) break;
 		}
 		return best;
 	}
 
-	// Data in aaaa-mm-gg: accetta data Excel (numero), testo aaaa-mm-gg o gg/mm/aaaa
 	function normalizzaData(v) {
 		if (typeof v === "number" && window.XLSX && window.XLSX.SSF) {
 			const d = window.XLSX.SSF.parse_date_code(v);
@@ -177,7 +155,7 @@
 		box.innerHTML = `<div class="cx-loading"><span class="cx-spinner"></span>Lettura di ${esc(file.name)}…</div>`;
 		stato.file = null;
 		try {
-			await new Promise(r => setTimeout(r, 30)); // lascia disegnare il messaggio prima del lavoro pesante
+			await new Promise(r => setTimeout(r, 30));
 			const wb = await leggiFileExcel(file);
 			const h = trovaIntestazione(wb);
 			if (!h) throw new Error('Non riconosco il file: non trovo la colonna "P/N Motore" (Shop Order), le colonne "Element" e "TagElementDescription" (TAG) o la colonna "EPA FAMILY" (Tracker EPA).');
@@ -194,7 +172,6 @@
 			const t = TIPI[h.tipo];
 			const errori = [], avvisi = [];
 			const intest = h.righe[h.riga].map(norm);
-			// colonne del file, nell'ordine del tipo (chiave per prima); se un nome c'è due volte vale la prima
 			const colonne = Object.keys(t.colonne).filter(c => h.trovate.includes(c));
 			const indici = colonne.map(c => intest.indexOf(norm(c)));
 			const mancanti = Object.keys(t.colonne).filter(c => !colonne.includes(c));
@@ -206,7 +183,6 @@
 					: "Colonne non trovate nel file: " + mancanti.join(", ") + ". Nel database resteranno vuote.");
 			}
 
-			// righe
 			const righe = [], numeri = [];
 			const visti = new Map(), doppi = [];
 			let senzaChiave = 0, vuote = 0;
@@ -224,7 +200,6 @@
 					if (v && typeof v === "object") errori.push(`Riga ${nRiga}, ${colonne[j]}: data non valida (${v.errore}).`);
 					else if (max && v && v.length > max) errori.push(`Riga ${nRiga}, ${colonne[j]}: testo troppo lungo (${v.length} caratteri, massimo ${max}).`);
 				});
-				// chiave ripetuta (come nel database: senza distinguere maiuscole/minuscole)
 				const k = h.tipo === "shoporder" ? valori[0].toLowerCase()
 					: ["Element", "PartNbrEngineering", "VersioneManufacturing", "VStart", "TagElementDescription"].map(c => { const j = colonne.indexOf(c); return j < 0 || valori[j] === null ? "" : String(valori[j]).toLowerCase(); }).join("\u0001");
 				if (visti.has(k)) doppi.push(`righe ${visti.get(k)} e ${nRiga}` + (h.tipo === "shoporder" ? ` (P/N ${valori[0]})` : ` (${valori[0]})`));
@@ -237,7 +212,6 @@
 			if (!righe.length) errori.push("Nel file non ci sono righe con dati sotto l'intestazione.");
 			if (errori.length > 30) errori.splice(30, errori.length - 30, `… e altri errori (${num(errori.length - 30)}).`);
 
-			// confronto col database
 			const confronto = await confronta(h.tipo, colonne, righe);
 
 			stato.file = { nome: file.name, tipo: h.tipo, foglio: h.foglio, rigaIntestazione: h.riga + 1, colonne, righe, numeri, errori, avvisi, confronto };
@@ -277,28 +251,22 @@
 			return { nuove, cambiano, uguali, soloDb, perColonna, totaleDb: db.righe.length };
 		}
 
-		// TAG: confronto sulle colonne che la pagina legge (Element, VStart, VEnd, TagElementDescription)
 		const usate = db.colonne.filter(c => colonne.includes(c));
 		const chiave = (get) => usate.map(c => String(get(c) ?? "").toLowerCase()).join("\u0001");
 		const chiaviDb = db.righe.map(r => chiave(c => r[iDb[c]]));
 		const chiaviFile = righe.map(v => chiave(c => v[colonne.indexOf(c)]));
 		const nelDb = new Set(chiaviDb), nelFile = new Set(chiaviFile);
-		// si contano le righe (due righe possono avere le stesse 4 colonne e differire per PartNbrEngineering o VersioneManufacturing)
 		const nuove = chiaviFile.filter(k => !nelDb.has(k)).length;
 		const tolte = chiaviDb.filter(k => !nelFile.has(k)).length;
 		return { nuove, tolte, uguali: righe.length - nuove, totaleDb: db.righe.length, foglioDb: db.foglio || "" };
 	}
 
-	/* ================= Tracker EPA ================= */
-
 	const chiaveNome = v => norm(v).replace(/[^a-z0-9]/g, "");
-	// testo su una riga (stati, settimane): spazi e a capo diventano uno spazio
 	function pulisci(v) {
 		if (v === null || v === undefined) return null;
 		const s = String(v).replace(/\s+/g, " ").trim();
 		return s && s.toUpperCase() !== "NULL" ? s : null;
 	}
-	// testo lungo (note): si tengono gli a capo
 	function pulisciNota(v) {
 		if (v === null || v === undefined) return null;
 		const s = String(v).split(/\r?\n/).map(r => r.replace(/[ \t]+/g, " ").trim()).join("\n").replace(/\n{2,}/g, "\n").trim();
@@ -309,7 +277,6 @@
 		const errori = [], avvisi = [];
 		const intest = h.righe[h.riga] || [];
 		const sopra = (h.righe[h.riga - 1] || []).slice();
-		// celle unite nella riga sopra l'intestazione (es. "PO10R" su più colonne): il valore vale per tutte
 		(ws && ws["!merges"] || []).forEach(m => {
 			if (m.s.r <= h.riga - 1 && m.e.r >= h.riga - 1) for (let c = m.s.c + 1; c <= m.e.c; c++) sopra[c] = sopra[m.s.c];
 		});
@@ -326,7 +293,6 @@
 		const altre = Object.keys(NOMI_EPA).filter(c => pos[c] === undefined && !TIPI.epa.obbligatorie.includes(c));
 		if (altre.length && !obblig.length) avvisi.push("Colonne non trovate nel file: " + altre.map(c => ETICHETTE_EPA[c]).join(", ") + ". Resteranno vuote.");
 
-		// le altre colonne: piani (PO09R, PO10R... con le loro misure) e "previous planning"
 		const usate = new Set(Object.values(pos));
 		const extra = [];
 		const isPiano = t => /^PO\d+R?$/i.test(t || "");
@@ -408,8 +374,6 @@
 		return { nuove, tolte: tolte.length, nomiTolte: tolte, cambiano, cambi, totaleDb: db.righe.length, foglioDb: db.ultimo ? db.ultimo.foglio : "" };
 	}
 
-	/* ================= analisi e conferma ================= */
-
 	function disegnaAnalisi(conferma) {
 		const f = stato.file;
 		const box = $("#cx-analisi");
@@ -474,7 +438,6 @@
 		az.innerHTML = '<span class="cx-spinner"></span><span class="cx-muted">Caricamento in corso…</span>';
 		try {
 			const r = await api("carica", { body: { tipo: f.tipo, file: f.nome, foglio: f.foglio, colonne: f.colonne, righe: f.righe, numeri: f.numeri } });
-			// i dati della pagina ora sono vecchi: il prossimo confronto li rilegge dal database
 			if (window.CertificatiDati) delete window.CertificatiDati[f.tipo];
 			stato.file = null;
 			$("#cx-file").value = "";
@@ -493,8 +456,6 @@
 			$("#cx-analisi .cx-card-body").insertAdjacentHTML("afterbegin", `<div class="cx-alert cx-alert-danger">Caricamento non riuscito, il database non è cambiato: ${esc(e.message)}</div>`);
 		}
 	}
-
-	/* ================= storico ================= */
 
 	async function caricaStorico() {
 		const box = $("#cx-storico");
@@ -520,8 +481,6 @@
 		}
 	}
 
-	/* ================= avvio ================= */
-
 	function avvia() {
 		const sezione = $("#cx-carica");
 		if (!sezione) return;
@@ -544,7 +503,6 @@
 		});
 	}
 
-	// Usate da Motori.js quando si apre / chiude la scheda
 	window.CertificatiCarica = {
 		mostra() {
 			const s = $("#cx-carica");

@@ -1,33 +1,5 @@
 <%@ WebHandler Language="C#" Class="CertificatiHandler" %>
 
-/*
- * Certificati (pagina Certificati.html). Shop Order e TAG stanno in due database:
- *   "ShopOrder" (tabella dbo.ShopOrder) e "TAG" (tabella dbo.TAG), stringhe di connessione con lo stesso nome nel Web.config.
- * Le colonne delle due tabelle hanno gli stessi nomi delle intestazioni del file Excel ("P/N Motore", "Engine code"...),
- * tutte di testo (anche VStart e VEnd, scritte come aaaa-mm-gg): nel codice si scrivono fra parentesi quadre.
- * Utenti e ruoli da PortaleLogin, come le altre pagine.
- *
- * Azioni:
- *   GET  ?health=1               controllo veloce dei due database
- *   GET  ?action=shoporder       tutti gli Shop Order  { colonne: [nomi come nel file Excel], righe: [[...], ...] }
- *   GET  ?action=tag             tutti i TAG           { colonne, righe, foglio (del file TAG caricato per ultimo) }
- *   GET  ?action=epa             famiglie del Tracker EPA (database "TrackerEPA"), con l'ultimo caricamento
- *   GET  ?action=caricamenti     ultimi caricamenti dei tre tipi di file
- *   POST ?action=carica          { tipo: "shoporder" | "tag", file, foglio, colonne: [nomi], righe: [[...], ...] }
- *
- * Caricamento (il file e' letto nel browser, qui arrivano solo le colonne che servono):
- *   - Shop Order: AGGIUNGE i P/N Motore nuovi e AGGIORNA quelli gia' presenti. Non cancella mai nulla.
- *     Le colonne che nel file non ci sono restano come sono nel database.
- *   - TAG: il file e' l'elenco completo, quindi SOSTITUISCE tutti i TAG.
- *   - Tracker EPA: il file e' la fotografia dello stato, quindi SOSTITUISCE tutte le famiglie.
- *     Il file (due righe di intestazione, piani PO09R/PO10R...) lo interpreta la pagina: qui arrivano campi fissi
- *     piu' il resto della riga in JSON (colonna Dati).
- *   In tutti e due i casi un'unica transazione: o va tutto o non cambia niente.
- *
- * Ruoli: "Certificati" vede; "Certificati Upload" vede e carica; Admin fa tutto. Controllo fatto qui, a ogni richiesta.
- * C# 5 (compilatore di default di ASP.NET), come gli altri .ashx del Portale.
- */
-
 using System;
 using System.Collections.Generic;
 using System.Configuration;
@@ -48,11 +20,10 @@ public class CertificatiHandler : IHttpHandler
 	private const string Admin = "Admin";
 	private const string RuoloUpload = "Certificati Upload";
 	private static readonly string[] RuoliAccesso = { "Certificati", RuoloUpload, Admin };
-	private const int MaxBodyChars = 100 * 1024 * 1024;   // il file Shop Order piu' grande manda circa 5 MB
+	private const int MaxBodyChars = 100 * 1024 * 1024;
 	private const int MaxRighe = 500000;
 	private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
 
-	// Colonna: nome nel file Excel (= intestazione mostrata nella pagina), colonna nel database, lunghezza massima (0 = data)
 	private class Col
 	{
 		public string Excel;
@@ -60,11 +31,10 @@ public class CertificatiHandler : IHttpHandler
 		public int Max;
 		public Col(string excel, string db, int max) { Excel = excel; Db = db; Max = max; }
 		public bool IsDate { get { return Max == 0; } }
-		// nome per l'SQL: fra parentesi quadre, perche' contiene spazi, punti e "/"
 		public string Q { get { return "[" + Db.Replace("]", "]]") + "]"; } }
 	}
 
-	// Shop Order: la prima e' la chiave
+	// Colonne e lunghezze: tenere uguali in JS/Motori/CaricaExcel.js
 	private static readonly Col[] ShopCols = {
 		new Col("P/N Motore", "P/N Motore", 255),
 		new Col("Engine code", "Engine code", 255),
@@ -81,7 +51,6 @@ public class CertificatiHandler : IHttpHandler
 		new Col("Status", "Status", 50)
 	};
 
-	// TAG: tutte le colonne del file. Obbligatorie: Element, VStart, VEnd, TagElementDescription
 	private static readonly Col[] TagCols = {
 		new Col("Element", "Element", 255),
 		new Col("PartNbrEngineering", "PartNbrEngineering", 255),
@@ -92,10 +61,8 @@ public class CertificatiHandler : IHttpHandler
 		new Col("TagElementValue", "TagElementValue", 255)
 	};
 	private static readonly string[] TagObbligatorie = { "Element", "VStart", "VEnd", "TagElementDescription" };
-	// colonne che la pagina usa (le altre si salvano soltanto)
 	private static readonly string[] TagLette = { "Element", "VStart", "VEnd", "TagElementDescription" };
 
-	// Tracker EPA: nomi decisi dalla pagina (CaricaExcel.js), uguali alle colonne di dbo.EpaFamiglie. Max > 4000 = NVARCHAR(MAX)
 	private static readonly Col[] EpaCols = {
 		new Col("Famiglia", "Famiglia", 50),
 		new Col("Ordine", "Ordine", 20),
@@ -194,8 +161,6 @@ public class CertificatiHandler : IHttpHandler
 		}
 	}
 
-	// ================= utente e ruoli (come Safety.ashx) =================
-
 	private static Utente CaricaUtente(HttpContext ctx)
 	{
 		Utente u = new Utente();
@@ -236,8 +201,6 @@ public class CertificatiHandler : IHttpHandler
 		if (!u.HaUno(RuoliAccesso)) throw new ForbiddenException("Non hai il ruolo Certificati. Chiedilo a un amministratore.");
 		return u;
 	}
-
-	// ================= lettura =================
 
 	private static void ShopOrder(HttpContext ctx)
 	{
@@ -300,7 +263,6 @@ public class CertificatiHandler : IHttpHandler
 		Reply(ctx, d);
 	}
 
-	// Righe come array di valori: testo, date come aaaa-mm-gg, vuoti come null (piu' leggero di un oggetto per riga)
 	private static List<object[]> LeggiRighe(SqlConnection cn, string sql, int n)
 	{
 		List<object[]> righe = new List<object[]>();
@@ -337,7 +299,6 @@ public class CertificatiHandler : IHttpHandler
 	private static List<Dictionary<string, object>> UltimiCaricamenti(SqlConnection cn, int quanti)
 	{
 		List<Dictionary<string, object>> l = new List<Dictionary<string, object>>();
-		// le colonne dei conteggi sono diverse nei due database (Aggiornate / Tolte): si leggono tutte con *
 		using (SqlCommand cmd = new SqlCommand("SELECT TOP (" + quanti.ToString(Inv) + ") * FROM dbo.Caricamenti ORDER BY Id DESC", cn))
 		using (SqlDataReader r = cmd.ExecuteReader())
 		{
@@ -351,7 +312,6 @@ public class CertificatiHandler : IHttpHandler
 					if (v is DateTime) v = ((DateTime)v).ToString("yyyy-MM-dd HH:mm", Inv);
 					c[nome.Substring(0, 1).ToLowerInvariant() + nome.Substring(1)] = v;
 				}
-				// nomi brevi usati dalla pagina
 				c["data"] = c.ContainsKey("dataOra") ? c["dataOra"] : null;
 				c["utente"] = c.ContainsKey("nomeUtente") && c["nomeUtente"] != null ? c["nomeUtente"] : (c.ContainsKey("username") ? c["username"] : null);
 				c["file"] = c.ContainsKey("nomeFile") ? c["nomeFile"] : null;
@@ -367,13 +327,10 @@ public class CertificatiHandler : IHttpHandler
 		d["ok"] = true;
 		using (SqlConnection cn = Open(ShopConnection)) d["shoporder"] = UltimiCaricamenti(cn, 10);
 		using (SqlConnection cn = Open(TagConnection)) d["tag"] = UltimiCaricamenti(cn, 10);
-		// Tracker EPA: se il database non c'e' ancora, gli altri due elenchi si vedono lo stesso
 		try { using (SqlConnection cn = Open(EpaConnection)) d["epa"] = UltimiCaricamenti(cn, 10); }
 		catch (Exception ex) { d["epa"] = new List<object>(); d["epaErrore"] = ex.Message; }
 		Reply(ctx, d);
 	}
-
-	// ================= caricamento =================
 
 	private static void Carica(HttpContext ctx, Utente u, Dictionary<string, object> body)
 	{
@@ -387,7 +344,6 @@ public class CertificatiHandler : IHttpHandler
 		string file = Cut(StrOpt(body, "file"), 260);
 		string foglio = Cut(StrOpt(body, "foglio"), 100);
 
-		// colonne mandate dalla pagina: solo nomi conosciuti, ognuno una volta, la chiave sempre
 		object[] nomi = Arr(body, "colonne", 100);
 		List<Col> cols = new List<Col>();
 		foreach (object o in nomi)
@@ -410,9 +366,8 @@ public class CertificatiHandler : IHttpHandler
 
 		object[] righe = Arr(body, "righe", MaxRighe);
 		if (righe.Length == 0) throw new UserException("Il file non contiene righe.");
-		object[] numeri = body.ContainsKey("numeri") ? body["numeri"] as object[] : null; // numero di riga nel file Excel, per i messaggi
+		object[] numeri = body.ContainsKey("numeri") ? body["numeri"] as object[] : null;
 
-		// tabella in memoria con i valori controllati
 		DataTable dt = new DataTable();
 		foreach (Col c in cols) dt.Columns.Add(c.Db, typeof(string));
 		List<string> errori = new List<string>();
@@ -443,7 +398,6 @@ public class CertificatiHandler : IHttpHandler
 			}
 			if (dr[0] == DBNull.Value) { errori.Add(dove + ": manca " + cols[0].Excel + "."); continue; }
 
-			// chiave ripetuta: Shop Order = P/N Motore; TAG = Element + PartNbrEngineering + VersioneManufacturing + VStart + TagElementDescription
 			string chiave = tipo == "tag" ? ChiaveTag(dr, cols) : (string)dr[0];
 			if (!chiavi.Add(chiave)) { errori.Add(dove + ": " + (tipo != "tag" ? cols[0].Excel + " " + chiave + " ripetuto nel file." : "TAG ripetuto nel file (" + chiave.Replace("\u0001", " | ") + ").")); continue; }
 			dt.Rows.Add(dr);
@@ -474,7 +428,6 @@ public class CertificatiHandler : IHttpHandler
 		return string.Join("\u0001", parti);
 	}
 
-	// Tabella temporanea con le stesse colonne (stessa collation del database, cosi' i confronti funzionano)
 	private static void CopiaInTemp(SqlConnection cn, SqlTransaction tx, string temp, DataTable dt, List<Col> cols, bool chiave)
 	{
 		StringBuilder sql = new StringBuilder("CREATE TABLE " + temp + " (");
@@ -497,7 +450,6 @@ public class CertificatiHandler : IHttpHandler
 		}
 	}
 
-	// Shop Order: aggiunge i nuovi, aggiorna quelli cambiati, non cancella niente
 	private static Dictionary<string, object> CaricaShopOrder(DataTable dt, List<Col> cols, Utente u, string file, string foglio)
 	{
 		int nuove = 0, aggiornate = 0;
@@ -522,7 +474,6 @@ public class CertificatiHandler : IHttpHandler
 			string sql =
 				"DECLARE @esito TABLE (azione NVARCHAR(10)); " +
 				"MERGE dbo.ShopOrder AS t USING #Carica AS s ON t." + cols[0].Q + " = s." + cols[0].Q + " " +
-				// aggiorna solo se almeno un valore e' diverso (EXCEPT confronta anche i vuoti)
 				(cols.Count > 1
 					? "WHEN MATCHED AND EXISTS (SELECT " + sorgente + " EXCEPT SELECT " + destinazione + ") THEN UPDATE SET " + set + "t.AggiornatoIl = SYSDATETIME() "
 					: "") +
@@ -565,7 +516,6 @@ public class CertificatiHandler : IHttpHandler
 		return d;
 	}
 
-	// TAG: il contenuto della tabella diventa quello del file
 	private static Dictionary<string, object> CaricaTag(DataTable dt, List<Col> cols, Utente u, string file, string foglio)
 	{
 		int nuove = 0, tolte = 0;
@@ -574,13 +524,12 @@ public class CertificatiHandler : IHttpHandler
 		{
 			CopiaInTemp(cn, tx, "#Carica", dt, cols, false);
 
-			// colonne del database: quelle che il file non ha restano vuote
 			StringBuilder tutteDb = new StringBuilder(), daFile = new StringBuilder();
 			foreach (Col c in TagCols)
 			{
 				tutteDb.Append(tutteDb.Length == 0 ? "" : ", ").Append(c.Q);
 				daFile.Append(daFile.Length == 0 ? "" : ", ");
-				daFile.Append(cols.Contains(c) ? c.Q : "CAST(NULL AS NVARCHAR(255)) AS " + c.Q); // il nome serve nelle sottoquery con EXCEPT
+				daFile.Append(cols.Contains(c) ? c.Q : "CAST(NULL AS NVARCHAR(255)) AS " + c.Q);
 			}
 
 			string sql =
@@ -595,7 +544,6 @@ public class CertificatiHandler : IHttpHandler
 					if (r.Read()) { nuove = r.GetInt32(0); tolte = r.GetInt32(1); }
 				}
 			}
-			// comando a parte (non dentro il reader qui sopra): cosi' un errore qui arriva subito e la transazione non si chiude
 			using (SqlCommand cmd = new SqlCommand("DELETE FROM dbo.TAG; INSERT INTO dbo.TAG (" + tutteDb + ") SELECT " + daFile + " FROM #Carica;", cn, tx))
 			{
 				cmd.CommandTimeout = 600;
@@ -626,7 +574,6 @@ public class CertificatiHandler : IHttpHandler
 		return d;
 	}
 
-	// Tracker EPA: il contenuto della tabella diventa quello del file (una riga per famiglia)
 	private static Dictionary<string, object> CaricaEpa(DataTable dt, List<Col> cols, Utente u, string file, string foglio)
 	{
 		int nuove = 0, tolte = 0;
@@ -680,8 +627,6 @@ public class CertificatiHandler : IHttpHandler
 		return d;
 	}
 
-	// ================= controllo =================
-
 	private static void Health(HttpContext ctx)
 	{
 		Dictionary<string, object> d = new Dictionary<string, object>();
@@ -725,8 +670,6 @@ public class CertificatiHandler : IHttpHandler
 		}
 		Reply(ctx, d);
 	}
-
-	// ================= richiesta e risposta =================
 
 	private static SqlConnection Open(string name)
 	{

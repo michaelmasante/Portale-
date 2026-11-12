@@ -1,4 +1,4 @@
-# Repair Tracker nel Portale (aggiornato al 03/11/2026)
+# Repair Tracker nel Portale (aggiornato al 09/11/2026)
 
 Rifacimento di `davidefriscia/repair-tracker` (Angular + PHP + MySQL su XAMPP) come pagina del Portale: un HTML, un JS, un CSS, l'API `.ashx` e un database SQL Server tutto suo (`RepairTracker`). Login e ruoli sono quelli del Portale.
 
@@ -30,7 +30,7 @@ Rifacimento di `davidefriscia/repair-tracker` (Angular + PHP + MySQL su XAMPP) c
 
 | Ruolo | Cosa fa |
 |---|---|
-| Riparazioni | vede tutto, non modifica |
+| Riparazioni | **sola lettura**: dashboard, analisi fornitori, Richieste magazzino, Richieste ricambi, Coda RUO (tutte le aree) e il dettaglio di ogni pratica con tutte le fasi. Nessun bottone di modifica, conferma, approvazione o eliminazione (l'API rifiuta comunque le scritture). Non vede Gestione |
 | Manutentori | apre richieste, corregge la sua scheda |
 | Magazzino | anagrafica, spedizione, chiusura |
 | TeamRicambi | fornitore, preventivo, RDA, ordine, rientro; può aprire richieste |
@@ -58,14 +58,14 @@ Nel database si salva il codice (es. `C6611004`); la pagina mostra "codice — d
 
 ## Il flusso
 
-Manutentori → Magazzino → Team Ricambi (fornitore) → Magazzino (spedizione) → Team Ricambi (preventivo) → RUO → Team Ricambi (RDA) → Team Ricambi (ordine) → Team Ricambi (rientro) → Magazzino (chiusura).
+Manutentori → Magazzino → Team Ricambi (fornitore) → Magazzino (fase spedizione) → Team Ricambi (preventivo) → RUO → Team Ricambi (RDA) → Team Ricambi (ordine) → Team Ricambi (rientro) → Magazzino (chiusura).
 
 | Scheda | Campi (* obbligatorio) |
 |---|---|
 | Manutentori / Nuova richiesta | Descrizione breve*, Codice SAP, Area*, Centro di costo* (dell'area), Targa macchina*, Operazione*, Priorità, Tipo guasto (Elettrico/Meccanico/Oleodinamico/Usura), Descrizione e note |
 | Magazzino | Tipo riparazione* (Meccanica / Elettronica / **Laboratorio Elettrotecnico**), Ubicazione*, Movimento SAP*; solo con Laboratorio Elettrotecnico compare **Previsione riparazione** (data, facoltativa) |
 | Team Ricambi | Fornitore*, Bolla* |
-| Magazzino — Spedizione | Data spedizione* |
+| Magazzino — Fase Spedizione | Data spedizione* |
 | Team Ricambi — Preventivo | Numero preventivo, Preventivo*, Tempo di consegna* (testo libero, es. "2 settimane", "fine mese") |
 | RUO | Approva / Rifiuta (niente note). Vede area, preventivo, tempo di consegna e il **disponibile del mese** della sua area |
 | Team Ricambi — RDA | Numero RDA*, Data RDA* (proposta oggi, modificabile), spunta **Rilascio RDA**: senza spunta si salva ma la pratica resta lì (stato "Accettata"); con la spunta "Rilascia RDA e passa all'ordine" (stato "Attesa ordine") |
@@ -73,7 +73,7 @@ Manutentori → Magazzino → Team Ricambi (fornitore) → Magazzino (spedizione
 | Team Ricambi — Rientro | Bolla di rientro*, Data rientro*, Entrata merci a SAP* |
 | Magazzino — Chiusura | Istruzione "Verifica la completezza della pratica e conferma", poi Conferma |
 
-- **Laboratorio Elettrotecnico**: alla Conferma del Magazzino la pratica salta Team Ricambi, Spedizione, Preventivo, RUO, RDA e Ordine (schede grigie "Saltata") e va dritta al **Rientro**. Niente preventivo = niente budget scalato; pallino grigio in dashboard fino alla chiusura (poi verde). Se l'Admin cambia il tipo di riparazione dopo la conferma (da/verso Laboratorio) la pratica torna al Magazzino e i dati successivi si cancellano (con conferma).
+- **Laboratorio Elettrotecnico**: alla Conferma del Magazzino la pratica salta Team Ricambi, Fase Spedizione, Preventivo, RUO, RDA e Ordine (schede grigie "Saltata") e va dritta al **Rientro**. Niente preventivo = niente budget scalato; pallino grigio in dashboard fino alla chiusura (poi verde). Se l'Admin cambia il tipo di riparazione dopo la conferma (da/verso Laboratorio) la pratica torna al Magazzino e i dati successivi si cancellano (con conferma).
 - Le schede del Team Ricambi hanno **Salva** (dati anche incompleti, la pratica resta lì) oltre a **Conferma** (passa avanti).
 - Chi ha compilato una scheda la può correggere finché la scheda dopo non ha dati; l'Admin sempre.
 - Se l'Admin svuota un campo obbligatorio di una scheda già superata, la pratica torna a quella scheda e i dati successivi si cancellano (con conferma), approvazione RUO compresa: l'importo torna nel budget.
@@ -90,7 +90,7 @@ Manutentori → Magazzino → Team Ricambi (fornitore) → Magazzino (spedizione
 
 - Pallino: **grigio** in corso prima del RUO, **arancione** tocca al RUO, **verde** approvata (fino alla chiusura), **rosso** rifiutata.
 - Riga **rossa**: pezzo in ritardo (spunta messa) finché non è rientrato. Riga **verde**: rientrata, manca solo la chiusura del Magazzino.
-- Riquadri in alto (cliccabili come filtro): Totale, In corso, Attesa RUO, Approvate, Rifiutate, Pezzi in ritardo.
+- Riquadri in alto (cliccabili come filtro): Totale, In corso, Attesa RUO, **Attesa rilascio RDA** (pervinca: approvate dal RUO, RDA non ancora rilasciata = stato "Accettata"), Approvate, Rifiutate, Pezzi in ritardo.
 - Colonna "Richiesto da", filtri per colonna, ricerca, export Excel (con descrizione del centro di costo, pezzo in ritardo, data di approvazione).
 
 ## Tema
@@ -100,7 +100,7 @@ Scuro di base. Il bottone in alto a destra passa al chiaro e viceversa; la scelt
 ## Note per chi modifica
 
 - Fasi, campi obbligatori e ruoli sono in due posti da tenere uguali: `FASI` in `RepairTracker.js` e `Fasi` in `RepairTracker.ashx`.
-- Dopo ogni modifica a JS o CSS cambiare il `?v=` nei link di `RepairTracker.html` (ora JS `v=7`, CSS `v=6`).
+- Dopo ogni modifica a JS o CSS cambiare il `?v=` nei link di `RepairTracker.html` (ora JS `v=9`, CSS `v=7`).
 - Versione nel footer: `VERSIONE` in cima a `RepairTracker.js` (ora 0.3.0).
 - Librerie da cdnjs: Chart.js 4.4.1, ExcelJS 4.4.0, Bootstrap Icons 1.11.3. Se non si caricano: niente grafici, export in CSV, niente icone.
 

@@ -191,7 +191,6 @@ a {
     margin: 0 auto;
 }
 
-/* Tile di una pagina per cui l'utente non ha il ruolo (vedi Portal.js) */
 .card.tile-bloccata {
     filter: grayscale(1);
     opacity: .55;

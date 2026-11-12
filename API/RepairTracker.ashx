@@ -1,38 +1,5 @@
 <%@ WebHandler Language="C#" Class="RepairTrackerHandler" %>
 
-/*
- * Repair Tracker (pagina RepairTracker.html): riparazioni urgenti, dal guasto alla chiusura.
- * Due database (li prepara SQL/RepairTracker_01_database.sql, poi gli aggiornamenti 02, 03, 04):
- *   - RepairTracker (stringa di connessione "RepairTracker"): pratiche (dbo.Riparazioni), storico (dbo.RiparazioniLog),
- *     budget mensile per area (dbo.BudgetAree);
- *   - PortaleLogin  (stringa "PortaleLogin", la stessa di Auth.ashx): utenti e ruoli.
- *
- * Azioni:
- *   GET  ?action=elenco            tutte le pratiche, utente collegato, menu a tendina, budget del mese corrente
- *   GET  ?action=pratica&id=N      una pratica + storico + budget del mese della sua area
- *   POST ?action=crea     { campi }                         nuova richiesta (Manutentori, TeamRicambi)
- *   POST ?action=salva    { id, card, campi, conferma }     modifica i dati di una fase
- *   POST ?action=avanza   { id, card, campi }               salva e passa alla fase successiva
- *                                                          (Magazzino con "Laboratorio Elettrotecnico": salta al Rientro)
- *   POST ?action=decidi   { id, esito }                     RUO: esito = "accettata" o "rifiutato"
- *   POST ?action=elimina  { id }                            solo Admin
- *   Solo "Admin Repair" (e Admin):
- *   GET  ?action=budget&anno=A&mese=M                      budget, approvato e disponibile di ogni area in quel mese
- *   POST ?action=budget_salva { anno, mese, importi }       importi = { "NEF": 15000, "CAMBI": null, ... } (null = nessun budget)
- *   GET  ?action=utenti                                     utenti del Portale con i loro ruoli del Repair Tracker
- *   POST ?action=utenti_ruoli { id, ruoli: [idRuolo, ...] } sostituisce SOLO i ruoli del Repair Tracker dell'utente
- *   GET  ?health=1                 controllo veloce dei database
- *
- * I permessi sono controllati QUI, a ogni richiesta, con le stesse regole che la pagina usa
- * per mostrare o nascondere i bottoni. Il flusso (fasi, campi, ruoli) e' descritto in Fasi:
- * se si cambia, va cambiato anche FASI in JS/RepairTracker/RepairTracker.js.
- *
- * Login di sviluppo: se nel Web.config c'e' LoginSviluppo (vedi Auth.ashx) e la richiesta arriva
- * da localhost, l'utente e' "sviluppo" con quei ruoli. Il database serve comunque.
- *
- * Codice in C# 5 (compilatore di default di ASP.NET), come gli altri .ashx del Portale.
- */
-
 using System;
 using System.Collections.Generic;
 using System.Configuration;
@@ -46,38 +13,29 @@ using System.Web.Script.Serialization;
 
 public class RepairTrackerHandler : IHttpHandler
 {
-	private const string LoginConnection = "PortaleLogin";   // utenti e ruoli
-	private const string DataConnection = "RepairTracker";   // pratiche e budget
+	private const string LoginConnection = "PortaleLogin";
+	private const string DataConnection = "RepairTracker";
 	private const int MaxBodyChars = 65536;
 	private const string Admin = "Admin";
-	private const string AdminRepair = "Admin Repair";       // budget mensile e ruoli del Repair Tracker degli utenti
+	private const string AdminRepair = "Admin Repair";
 
-	// Chi ha almeno uno di questi ruoli puo' usare il Repair Tracker (uguale al meta "ruoli" della pagina),
-	// piu' i ruoli RUO per area ("RUO CAMBI", ...), vedi RuoliAccesso()
+	// Tenere uguali al meta "ruoli" di RepairTracker.html
 	private static readonly string[] RuoliBase = { "Riparazioni", "Manutentori", "Magazzino", "TeamRicambi", "RUO", AdminRepair, Admin };
 
-	// RUO per area: il ruolo si chiama "RUO " + nome dell'area (es. "RUO CAMBI") e approva solo le pratiche di quell'area.
-	// Il ruolo "RUO" da solo approva tutte le aree.
 	private const string PrefissoRuo = "RUO ";
 
-	// Tipo di riparazione che salta fornitore, spedizione, preventivo, RUO, RDA e ordine: dal Magazzino si va al Rientro
+	// Uguale a LAB_ELETTRO in RepairTracker.js
 	private const string LabElettro = "Laboratorio Elettrotecnico";
 
-	// Chi puo' aprire una nuova richiesta
 	private static readonly string[] RuoliCreazione = { "Manutentori", "TeamRicambi" };
 
 	private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
 	private static readonly CultureInfo It = CultureInfo.GetCultureInfo("it-IT");
 
-	// ================= elenchi dei menu a tendina =================
-	// Sono qui (e solo qui): la pagina li riceve con ?action=elenco. Per cambiarli basta modificare queste righe.
-	// Se si aggiunge o rinomina un'area servono anche: il ruolo "RUO <area>" in PortaleLogin
-	// e il nome nel meta "ruoli" di RepairTracker.html.
-
 	private class Area
 	{
 		public string Nome;
-		public string[][] Centri;   // { codice, descrizione }
+		public string[][] Centri;
 	}
 
 	private static Area A(string nome, params string[] coppie)
@@ -89,9 +47,9 @@ public class RepairTrackerHandler : IHttpHandler
 		return a;
 	}
 
-	// Aree (UO) con i loro centri di costo (file CDC.xlsx del 23/10/2026; I&M = centri VECTOR, ePWT = centri CURSOR)
+	// Nuova area: aggiungere il ruolo "RUO <area>" in PortaleLogin e in RepairTracker.html
 	private static readonly Area[] UoCentri = {
-		A("NEF",   // centri NEF
+		A("NEF",
 			"C6590001", "OTHER OPERATING MM92/93",
 			"C6593900", "DIREZIONE",
 			"C6593901", "UTILIZZO FATTORI",
@@ -118,7 +76,7 @@ public class RepairTrackerHandler : IHttpHandler
 			"C6599200", "PERSONALE",
 			"C6599300", "FINANCE",
 			"C6599400", "ICT"),
-		A("I&M",   // centri VECTOR
+		A("I&M",
 			"C6390001", "OTHER OPERATING MM92/93",
 			"C6395250", "MONTAGGIO NUOVI MOTORI V",
 			"C6395251", "SALA PROVA NUOVI MOTORI V",
@@ -127,7 +85,7 @@ public class RepairTrackerHandler : IHttpHandler
 			"C6395261", "FABBRICATI",
 			"C6395265", "COSTI SPEC. DI SITO PROD.",
 			"C6395280", "O.L./RECUPERI"),
-		A("CAMBI",   // centri CAMBI
+		A("CAMBI",
 			"C6610001", "OTHER OPERATING MM92/93",
 			"C6611004", "PROVA ROTAZIONE CAMBI",
 			"C6611005", "RIGENERAZIONE CAMBI",
@@ -166,7 +124,7 @@ public class RepairTrackerHandler : IHttpHandler
 			"C6611800", "QUALITA' (LABORATORIO/SALA METROLGICA)",
 			"C6611900", "LAUNCH MANAGEMENT",
 			"C6619200", "SERVIZIO PERSONALE"),
-		A("PONTI",   // centri PONTI
+		A("PONTI",
 			"C6620001", "OTHER OPERATING MM92/93",
 			"C6621013", "COMMESSE, RELE PROTOTIPI",
 			"C6621132", "LAV.COP.C.TV.T.T.-PERNI F.",
@@ -199,13 +157,13 @@ public class RepairTrackerHandler : IHttpHandler
 			"C6629200", "SERVIZIO PERSONALE",
 			"C6627723", "ATTREZZERIA",
 			"C6627722", "LABORATORIO ELETTRONICO"),
-		A("ePWT",   // centri CURSOR
+		A("ePWT",
 			"C64G0001", "OTHER OPERATING MASTRO 92/93",
 			"C64G3949", "DRESSING CURSOR 9",
 			"C64G3950", "STRUTTURA C9",
 			"C64G3951", "BUILDING",
 			"C64G3980", "O.I. / RECUPERI"),
-		A("COMPRENSORIO",   // centri COMPRENSORIO
+		A("COMPRENSORIO",
 			"C6630001", "OTHER OPERATING MM92/93",
 			"C6639200", "SERVIZIO PERSONALE",
 			"C6639250", "SALA MEDICA",
@@ -233,7 +191,6 @@ public class RepairTrackerHandler : IHttpHandler
 		return a;
 	}
 
-	// Codici dei centri di costo dell'area (vuoto se l'area non esiste)
 	private static List<string> CentriDi(string area)
 	{
 		List<string> l = new List<string>();
@@ -249,17 +206,15 @@ public class RepairTrackerHandler : IHttpHandler
 		return l.ToArray();
 	}
 
-	// Ruoli che l'Admin Repair puo' dare e togliere (tutti quelli del Repair Tracker, nell'ordine delle colonne)
 	private static List<string> RuoliGestibili()
 	{
 		List<string> l = new List<string>();
 		l.Add("Riparazioni"); l.Add("Manutentori"); l.Add("Magazzino"); l.Add("TeamRicambi"); l.Add("RUO");
 		foreach (string a in Aree()) l.Add(PrefissoRuo + a);
-		l.Add(AdminRepair);   // questo lo puo' dare/togliere solo l'Admin
+		l.Add(AdminRepair);
 		return l;
 	}
 
-	// Il RUO puo' approvare/rifiutare questa pratica? "RUO" (o Admin) = tutte le aree, "RUO <area>" = solo quell'area.
 	private static bool PuoApprovare(Utente u, Dictionary<string, object> row)
 	{
 		if (u.Ha("RUO")) return true;
@@ -267,17 +222,15 @@ public class RepairTrackerHandler : IHttpHandler
 		return !string.IsNullOrEmpty(area) && u.Ha(PrefissoRuo + area);
 	}
 
-	// ================= il flusso =================
-
 	private class Campo
 	{
-		public string Nome;            // colonna in dbo.Riparazioni
-		public string Etichetta;       // per i messaggi di errore
-		public string Tipo;            // testo, maiuscolo, data, decimale, intero, scelta, priorita, centro, bool, interno
-		public int Max;                // lunghezza massima (testo)
-		public string[] Valori;        // valori ammessi (scelta)
-		public bool Obbligatorio;      // per un bool: deve essere spuntato
-		public string SeCampo;         // il campo esiste solo se SeCampo vale SeValore (altrimenti si svuota e non e' obbligatorio)
+		public string Nome;
+		public string Etichetta;
+		public string Tipo;
+		public int Max;
+		public string[] Valori;
+		public bool Obbligatorio;
+		public string SeCampo;
 		public object SeValore;
 	}
 
@@ -285,9 +238,9 @@ public class RepairTrackerHandler : IHttpHandler
 	{
 		public string Key;
 		public string Titolo;
-		public string Ruolo;       // ruolo che compila la fase
-		public string Stato;       // stato della pratica in cui questa fase e' "attiva" (null per manutentori)
-		public string Avanti;      // stato dopo "Conferma" (null: nessun avanzamento con questa fase)
+		public string Ruolo;
+		public string Stato;
+		public string Avanti;
 		public Campo[] Campi;
 	}
 
@@ -312,7 +265,6 @@ public class RepairTrackerHandler : IHttpHandler
 		return c;
 	}
 
-	// Campo scritto solo dall'API (mai dalla pagina): serve per svuotarlo quando la pratica torna indietro
 	private static Campo Interno(string nome)
 	{
 		return C(nome, nome, "interno", 0, false);
@@ -325,13 +277,13 @@ public class RepairTrackerHandler : IHttpHandler
 		return f;
 	}
 
-	// L'ordine conta: e' l'ordine delle card nella pagina di dettaglio.
+	// Tenere uguale a FASI in JS/RepairTracker/RepairTracker.js
 	private static readonly Fase[] Fasi = {
 		F("manutentori", "Manutentori", "Manutentori", null, null,
 			C("codice_componente", "Descrizione breve", "testo", 200, true),
 			C("codice_sap", "Codice SAP", "testo", 50, false),
 			S("area", "Area", true, Aree()),
-			C("centro_costo", "Centro di costo", "centro", 50, true),   // uno dei centri dell'area scelta
+			C("centro_costo", "Centro di costo", "centro", 50, true),
 			C("macchina", "Targa macchina", "testo", 100, true),
 			C("op", "Operazione", "testo", 50, true),
 			C("priorita", "Priorità", "priorita", 0, false),
@@ -345,15 +297,14 @@ public class RepairTrackerHandler : IHttpHandler
 		F("ricambi_1", "Team Ricambi", "TeamRicambi", "richiesta_inoltrata", "attesa_spedizione",
 			C("fornitore", "Fornitore", "maiuscolo", 150, true),
 			C("bolla", "Bolla", "testo", 50, true)),
-		F("magazzino_2", "Magazzino — Spedizione", "Magazzino", "attesa_spedizione", "spedito",
+		F("magazzino_2", "Magazzino — Fase Spedizione", "Magazzino", "attesa_spedizione", "spedito",
 			C("data_spedizione", "Data spedizione", "data", 0, true)),
 		F("ricambi_2", "Team Ricambi — Preventivo", "TeamRicambi", "spedito", "attesa_approvazione",
 			C("numero_preventivo", "Numero preventivo", "testo", 50, false),
 			C("preventivo", "Preventivo", "decimale", 0, true),
-			C("tempo_consegna_valore", "Tempo di consegna", "testo", 50, true)),   // testo libero, es. "2 settimane"
+			C("tempo_consegna_valore", "Tempo di consegna", "testo", 50, true)),
 		F("ruo", "RUO — Approvazione", "RUO", "attesa_approvazione", null,
 			Interno("data_approvazione"), Interno("disponibile_mese"), Interno("note_ruo")),
-		// RDA: si fa la richiesta di acquisto; si passa all'ordine solo con la spunta "Rilascio RDA"
 		F("ricambi_rda", "Team Ricambi — RDA", "TeamRicambi", "accettata", "rda_rilasciata",
 			C("numero_rda", "Numero RDA", "testo", 50, true),
 			C("data_rda", "Data RDA", "data", 0, true),
@@ -384,7 +335,6 @@ public class RepairTrackerHandler : IHttpHandler
 		return Fasi[i];
 	}
 
-	// La pratica va in Laboratorio Elettrotecnico? (valore nuovo se c'e', altrimenti quello salvato)
 	private static bool Lab(Dictionary<string, object> row, Dictionary<string, object> valori)
 	{
 		object v = valori != null && valori.ContainsKey("tipo_riparazione") ? valori["tipo_riparazione"] : (row == null ? null : row["tipo_riparazione"]);
@@ -396,14 +346,12 @@ public class RepairTrackerHandler : IHttpHandler
 		return Lab(row, null);
 	}
 
-	// Con il Laboratorio Elettrotecnico le fasi tra il Magazzino e il Rientro non si fanno
 	private static bool Saltata(Fase f, bool lab)
 	{
 		int i = Indice(f.Key);
 		return lab && i > Indice("magazzino_1") && i < Indice("ricambi_4");
 	}
 
-	// Indice della fase su cui si deve agire ora. Rifiutato si ferma sulla fase RUO; chiuso = tutto completato.
 	private static int IndiceCorrente(string stato)
 	{
 		if (stato == "rifiutato") return Indice("ruo");
@@ -411,7 +359,6 @@ public class RepairTrackerHandler : IHttpHandler
 		return Fasi.Length;
 	}
 
-	// "completata", "attiva", "futura" o "saltata" (Laboratorio Elettrotecnico)
 	private static string StatoFase(Fase f, string stato, bool lab)
 	{
 		if (Saltata(f, lab)) return "saltata";
@@ -424,8 +371,6 @@ public class RepairTrackerHandler : IHttpHandler
 		return "futura";
 	}
 
-	// La fase dopo ha gia' dati? Se si', chi ha compilato questa fase non la puo' piu' toccare (solo Admin).
-	// Le fasi saltate (Laboratorio Elettrotecnico) non contano: si guarda la prima fase che si fa davvero.
 	private static bool SuccessivaHaDati(Fase f, Dictionary<string, object> row)
 	{
 		bool lab = Lab(row);
@@ -434,7 +379,7 @@ public class RepairTrackerHandler : IHttpHandler
 		if (j >= Fasi.Length) return false;
 		Fase s = Fasi[j];
 		string stato = (string)row["stato"];
-		if (s.Key == "ruo") return stato == "rifiutato" || IndiceCorrente(stato) > j; // il RUO ha gia' deciso
+		if (s.Key == "ruo") return stato == "rifiutato" || IndiceCorrente(stato) > j;
 		if (s.Campi.Length == 0) return IndiceCorrente(stato) > j;
 		foreach (Campo c in s.Campi) if (HaDato(row[c.Nome])) return true;
 		return false;
@@ -448,8 +393,6 @@ public class RepairTrackerHandler : IHttpHandler
 		if (st == "completata" && SuccessivaHaDati(f, row)) return false;
 		return u.Ha(f.Ruolo);
 	}
-
-	// ================= richiesta =================
 
 	private class UserException : Exception
 	{
@@ -472,7 +415,6 @@ public class RepairTrackerHandler : IHttpHandler
 			get { return Contiene(Admin); }
 		}
 
-		// Budget e ruoli del Repair Tracker
 		public bool IsAdminRepair
 		{
 			get { return IsAdmin || Contiene(AdminRepair); }
@@ -517,7 +459,6 @@ public class RepairTrackerHandler : IHttpHandler
 			string action = (req.QueryString["action"] ?? "").Trim().ToLowerInvariant();
 			Utente u = CaricaUtente(context);
 
-			// gestione utenti: solo database del login
 			if (action == "utenti") { RichiediAdminRepair(u); Utenti(context, u); return; }
 			if (action == "utenti_ruoli")
 			{
@@ -573,9 +514,6 @@ public class RepairTrackerHandler : IHttpHandler
 		if (!u.IsAdminRepair) throw new ForbiddenException("Questa sezione è riservata al ruolo " + AdminRepair + ".");
 	}
 
-	// ================= utente e ruoli =================
-
-	// Utente e ruoli si leggono da PortaleLogin (come Auth.ashx); le pratiche stanno nell'altro database.
 	private static Utente CaricaUtente(HttpContext ctx)
 	{
 		Utente u = new Utente();
@@ -617,8 +555,6 @@ public class RepairTrackerHandler : IHttpHandler
 		return u;
 	}
 
-	// ================= letture =================
-
 	private static void Elenco(HttpContext ctx, SqlConnection cn, Utente u)
 	{
 		List<object> pratiche = new List<object>();
@@ -633,7 +569,6 @@ public class RepairTrackerHandler : IHttpHandler
 		io["nome"] = u.Nome;
 		io["ruoli"] = u.Ruoli;
 
-		// menu a tendina: aree (UO) con i loro centri di costo, tipi di guasto
 		List<object> aree = new List<object>();
 		foreach (Area a in UoCentri)
 		{
@@ -654,7 +589,6 @@ public class RepairTrackerHandler : IHttpHandler
 		opzioni["aree"] = aree;
 		opzioni["tipiGuasto"] = TipiGuasto;
 
-		// budget del mese corrente di tutte le aree (coda RUO)
 		DateTime oggi = DateTime.Today;
 		Dictionary<string, object> budget = new Dictionary<string, object>();
 		foreach (string a in Aree()) budget[a] = BudgetPerJson(LeggiBudget(cn, null, a, oggi.Year, oggi.Month, 0));
@@ -707,8 +641,6 @@ public class RepairTrackerHandler : IHttpHandler
 		Reply(ctx, d);
 	}
 
-	// ================= scritture =================
-
 	private static void Crea(HttpContext ctx, SqlConnection cn, Utente u, Dictionary<string, object> campi)
 	{
 		if (!u.HaUno(RuoliCreazione)) throw new ForbiddenException("Non puoi aprire nuove richieste.");
@@ -723,7 +655,6 @@ public class RepairTrackerHandler : IHttpHandler
 		int id;
 		using (SqlTransaction tx = cn.BeginTransaction())
 		{
-			// Numero pratica: anno-progressivo (2026-0001). Il blocco evita due numeri uguali in contemporanea.
 			string anno = DateTime.Now.Year.ToString(Inv);
 			int prossimo = 1;
 			using (SqlCommand cmd = new SqlCommand(
@@ -743,7 +674,7 @@ public class RepairTrackerHandler : IHttpHandler
 				int k = 0;
 				foreach (KeyValuePair<string, object> kv in valori)
 				{
-					colonne.Append(", ").Append(kv.Key);            // solo nomi presi da Fasi, mai dalla richiesta
+					colonne.Append(", ").Append(kv.Key);
 					param.Append(", @v").Append(k);
 					cmd.Parameters.AddWithValue("@v" + k, kv.Value);
 					k++;
@@ -782,9 +713,6 @@ public class RepairTrackerHandler : IHttpHandler
 			ControllaCentro(f, row, valori);
 			bool completa = Completa(f, row, valori);
 
-			// Fase gia' superata con un campo obbligatorio svuotato, oppure Magazzino che entra o esce dal
-			// Laboratorio Elettrotecnico (cambia il percorso): la pratica torna a questa fase
-			// e i dati delle fasi successive vengono cancellati (come nella vecchia app).
 			bool cambioPercorso = f.Key == "magazzino_1" && Lab(row) != Lab(row, valori);
 			bool regressione = (!completa || cambioPercorso) && f.Stato != null && stato != f.Stato;
 
@@ -808,7 +736,6 @@ public class RepairTrackerHandler : IHttpHandler
 			string nuovoStato = null;
 			if (regressione)
 			{
-				// si svuotano anche i campi interni (approvazione RUO): l'importo torna nel budget del mese
 				for (int i = Indice(f.Key) + 1; i < Fasi.Length; i++)
 					foreach (Campo c in Fasi[i].Campi) valori[c.Nome] = DBNull.Value;
 				nuovoStato = f.Stato;
@@ -843,7 +770,6 @@ public class RepairTrackerHandler : IHttpHandler
 					? "Per passare all'ordine serve la spunta \"Rilascio RDA\"."
 					: "Compila tutti i campi obbligatori.");
 
-			// Laboratorio Elettrotecnico: dal Magazzino si va direttamente al Rientro (Team Ricambi)
 			bool salto = f.Key == "magazzino_1" && Lab(row, valori);
 			string avanti = salto ? Fasi[Indice("ricambi_4")].Stato : f.Avanti;
 
@@ -856,8 +782,6 @@ public class RepairTrackerHandler : IHttpHandler
 		Ok(ctx);
 	}
 
-	// Il RUO approva o rifiuta. Approvando, il preventivo si scala dal budget dell'area nel mese corrente:
-	// si salvano la data di approvazione e il disponibile che c'era prima (per lo storico della pratica).
 	private static void Decidi(HttpContext ctx, SqlConnection cn, Utente u, int id, string esito)
 	{
 		if (esito != "accettata" && esito != "rifiutato") throw new UserException("Richiesta non valida.");
@@ -867,8 +791,6 @@ public class RepairTrackerHandler : IHttpHandler
 			Dictionary<string, object> row = CaricaRiga(cn, tx, id);
 			string stato = (string)row["stato"];
 
-			// RUO (o Admin) decide quando la pratica e' in attesa di approvazione;
-			// solo l'Admin puo' cambiare la decisione, e solo finche' nessuno e' andato avanti.
 			bool ok = (stato == "attesa_approvazione" && PuoApprovare(u, row)) ||
 			          (u.IsAdmin && (stato == "accettata" || stato == "rifiutato"));
 			if (!ok) throw new ForbiddenException("Non puoi approvare o rifiutare questa pratica: è dell'area " + (row["area"] as string ?? "—") + ".");
@@ -892,7 +814,7 @@ public class RepairTrackerHandler : IHttpHandler
 			}
 			else
 			{
-				valori["data_approvazione"] = DBNull.Value;   // se era stata approvata, l'importo torna nel budget
+				valori["data_approvazione"] = DBNull.Value;
 				valori["disponibile_mese"] = DBNull.Value;
 			}
 
@@ -907,7 +829,7 @@ public class RepairTrackerHandler : IHttpHandler
 	private static void Elimina(HttpContext ctx, SqlConnection cn, Utente u, int id)
 	{
 		if (!u.IsAdmin) throw new ForbiddenException("Solo un amministratore può eliminare una pratica.");
-		using (SqlCommand cmd = new SqlCommand("DELETE FROM dbo.Riparazioni WHERE id = @id", cn)) // lo storico si cancella con la pratica
+		using (SqlCommand cmd = new SqlCommand("DELETE FROM dbo.Riparazioni WHERE id = @id", cn))
 		{
 			cmd.Parameters.Add("@id", SqlDbType.Int).Value = id;
 			if (cmd.ExecuteNonQuery() == 0) throw new UserException("Pratica non trovata. Ricarica la pagina.");
@@ -915,23 +837,19 @@ public class RepairTrackerHandler : IHttpHandler
 		Ok(ctx);
 	}
 
-	// ================= budget mensile per area =================
-
 	private class Budget
 	{
 		public string Area;
 		public int Anno;
 		public int Mese;
-		public decimal? Importo;    // null = non impostato
-		public decimal Approvato;   // preventivi delle pratiche dell'area approvate nel mese
+		public decimal? Importo;
+		public decimal Approvato;
 		public int Pratiche;
 	}
 
-	// pratiche dell'area approvate nel mese (una pratica rifiutata o tornata indietro non ha data_approvazione)
 	private const string Approvate =
 		"WHERE area = @a AND data_approvazione >= @da AND data_approvazione < @a2 AND stato <> N'rifiutato' AND id <> @id";
 
-	// Budget di un'area in un mese. escludiId: pratica da non contare (quella che si sta approvando).
 	private static Budget LeggiBudget(SqlConnection cn, SqlTransaction tx, string area, int anno, int mese, int escludiId)
 	{
 		Budget b = new Budget();
@@ -990,7 +908,6 @@ public class RepairTrackerHandler : IHttpHandler
 		Reply(ctx, d);
 	}
 
-	// importi: { area: numero } imposta, { area: null o "" } toglie il budget. Le aree non presenti non cambiano.
 	private static void BudgetSalva(HttpContext ctx, SqlConnection cn, Utente u, int anno, int mese, Dictionary<string, object> importi)
 	{
 		ControllaMese(anno, mese);
@@ -1035,9 +952,6 @@ public class RepairTrackerHandler : IHttpHandler
 		return It.DateTimeFormat.GetMonthName(mese) + " " + anno.ToString(Inv);
 	}
 
-	// ================= gestione utenti (solo ruoli del Repair Tracker) =================
-
-	// Id dei ruoli gestibili presenti in PortaleLogin, nell'ordine di RuoliGestibili()
 	private static List<KeyValuePair<int, string>> IdRuoliGestibili(SqlConnection cn)
 	{
 		Dictionary<string, int> perNome = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
@@ -1076,7 +990,7 @@ public class RepairTrackerHandler : IHttpHandler
 				while (r.Read())
 				{
 					int uid = r.GetInt32(0), rid = r.GetInt32(1);
-					if (!ids.Contains(rid)) continue;   // gli altri ruoli del Portale qui non si vedono
+					if (!ids.Contains(rid)) continue;
 					if (!assegnati.ContainsKey(uid)) assegnati[uid] = new List<int>();
 					assegnati[uid].Add(rid);
 				}
@@ -1107,8 +1021,6 @@ public class RepairTrackerHandler : IHttpHandler
 		}
 	}
 
-	// Sostituisce i ruoli del Repair Tracker dell'utente con quelli indicati. Gli altri ruoli del Portale restano.
-	// "Admin Repair" lo puo' dare o togliere solo l'Admin.
 	private static void UtentiRuoli(HttpContext ctx, Utente io, int userId, List<int> richiesti)
 	{
 		using (SqlConnection cn = Open(LoginConnection))
@@ -1161,7 +1073,6 @@ public class RepairTrackerHandler : IHttpHandler
 				tx.Commit();
 			}
 
-			// registro accessi del Portale (come Gestione utenti): un errore qui non annulla la modifica
 			try
 			{
 				using (SqlCommand cmd = new SqlCommand(
@@ -1181,9 +1092,6 @@ public class RepairTrackerHandler : IHttpHandler
 		Ok(ctx);
 	}
 
-	// ================= campi =================
-
-	// Converte i campi inviati dalla pagina nei valori per il database. Solo i campi della fase sono accettati.
 	private static Dictionary<string, object> Valori(Fase f, Dictionary<string, object> campi)
 	{
 		Dictionary<string, object> valori = new Dictionary<string, object>();
@@ -1194,8 +1102,6 @@ public class RepairTrackerHandler : IHttpHandler
 			if (c == null || c.Tipo == "interno") throw new UserException("Campo non previsto: " + nome + ".");
 			valori[c.Nome] = Valore(c, campi[nome]);
 		}
-		// campo condizionato: se la condizione non c'e' piu', il campo si svuota
-		// (es. niente "Pezzo in ritardo" -> niente data ritardo; tipo diverso dal laboratorio -> niente previsione)
 		foreach (Campo c in f.Campi)
 			if (c.SeCampo != null && valori.ContainsKey(c.SeCampo) && !Uguale(valori[c.SeCampo], c.SeValore))
 				valori[c.Nome] = DBNull.Value;
@@ -1253,19 +1159,17 @@ public class RepairTrackerHandler : IHttpHandler
 		throw new UserException("Campo non previsto: " + c.Nome + ".");
 	}
 
-	// Il centro di costo deve essere uno di quelli dell'area (UO). Si usano i valori nuovi, oppure quelli gia' salvati.
 	private static void ControllaCentro(Fase f, Dictionary<string, object> row, Dictionary<string, object> valori)
 	{
 		if (f.Key != "manutentori") return;
 		if (!valori.ContainsKey("area") && !valori.ContainsKey("centro_costo")) return;
 		object area = valori.ContainsKey("area") ? valori["area"] : (row == null ? null : row["area"]);
 		object centro = valori.ContainsKey("centro_costo") ? valori["centro_costo"] : (row == null ? null : row["centro_costo"]);
-		if (!HaValore(centro)) return; // se e' obbligatorio, lo dice gia' il controllo dei campi obbligatori
+		if (!HaValore(centro)) return;
 		if (!HaValore(area) || !CentriDi((string)area).Contains((string)centro))
 			throw new UserException("Il centro di costo \"" + centro + "\" non appartiene all'area scelta. Sceglilo di nuovo.");
 	}
 
-	// I campi obbligatori della fase sono compilati (valori nuovi, oppure quelli gia' nel database)?
 	private static bool Completa(Fase f, Dictionary<string, object> row, Dictionary<string, object> valori)
 	{
 		foreach (Campo c in f.Campi)
@@ -1273,12 +1177,11 @@ public class RepairTrackerHandler : IHttpHandler
 			if (!c.Obbligatorio) continue;
 			if (c.SeCampo != null && !Uguale(valori.ContainsKey(c.SeCampo) ? valori[c.SeCampo] : row[c.SeCampo], c.SeValore)) continue;
 			object v = valori.ContainsKey(c.Nome) ? valori[c.Nome] : row[c.Nome];
-			if (c.Tipo == "bool" ? !Vero(v) : !HaValore(v)) return false;   // una spunta obbligatoria deve essere messa
+			if (c.Tipo == "bool" ? !Vero(v) : !HaValore(v)) return false;
 		}
 		return true;
 	}
 
-	// Elenco dei campi cambiati, per lo storico ("Fornitore, Bolla")
 	private static string Cambiati(Fase f, Dictionary<string, object> row, Dictionary<string, object> valori)
 	{
 		StringBuilder sb = new StringBuilder();
@@ -1308,7 +1211,6 @@ public class RepairTrackerHandler : IHttpHandler
 		return s == null || s.Trim().Length > 0;
 	}
 
-	// Come HaValore, ma una spunta tolta (false) non conta come dato compilato
 	private static bool HaDato(object v)
 	{
 		if (v is bool) return (bool)v;
@@ -1320,7 +1222,6 @@ public class RepairTrackerHandler : IHttpHandler
 		return v is bool && (bool)v;
 	}
 
-	// valore del campo uguale a quello atteso (true per le spunte, un testo per i menu)
 	private static bool Uguale(object v, object atteso)
 	{
 		if (atteso is bool) return Vero(v) == (bool)atteso;
@@ -1331,8 +1232,6 @@ public class RepairTrackerHandler : IHttpHandler
 	{
 		return d.ContainsKey(key) ? d[key] : null;
 	}
-
-	// ================= database =================
 
 	private static SqlConnection Open(string name)
 	{
@@ -1354,7 +1253,6 @@ public class RepairTrackerHandler : IHttpHandler
 
 	private static Dictionary<string, object> CaricaRiga(SqlConnection cn, SqlTransaction tx, int id)
 	{
-		// dentro una transazione la riga resta bloccata fino al commit: due persone non avanzano la stessa pratica insieme
 		string sql = tx == null
 			? "SELECT * FROM dbo.Riparazioni WHERE id = @id"
 			: "SELECT * FROM dbo.Riparazioni WITH (UPDLOCK, ROWLOCK) WHERE id = @id";
@@ -1393,7 +1291,6 @@ public class RepairTrackerHandler : IHttpHandler
 		return x;
 	}
 
-	// UPDATE dei campi indicati (+ stato). Con statoAtteso aggiorna solo se la pratica e' ancora in quello stato.
 	private static int Aggiorna(SqlConnection cn, SqlTransaction tx, int id, Dictionary<string, object> valori, string nuovoStato, string statoAtteso)
 	{
 		using (SqlCommand cmd = new SqlCommand())
@@ -1402,7 +1299,7 @@ public class RepairTrackerHandler : IHttpHandler
 			int k = 0;
 			foreach (KeyValuePair<string, object> kv in valori)
 			{
-				sql.Append(", ").Append(kv.Key).Append(" = @v").Append(k);   // nomi presi da Fasi, mai dalla richiesta
+				sql.Append(", ").Append(kv.Key).Append(" = @v").Append(k);
 				cmd.Parameters.AddWithValue("@v" + k, kv.Value);
 				k++;
 			}
@@ -1447,14 +1344,11 @@ public class RepairTrackerHandler : IHttpHandler
 		return s.Length > max ? s.Substring(0, max) : s;
 	}
 
-	// ================= controllo veloce =================
-
 	private static void Health(HttpContext ctx)
 	{
 		Dictionary<string, object> d = new Dictionary<string, object>();
 		d["status"] = "ok";
 
-		// database delle pratiche: tabelle e colonne di tutti gli aggiornamenti
 		try
 		{
 			using (SqlConnection cn = Open(DataConnection))
@@ -1497,7 +1391,6 @@ public class RepairTrackerHandler : IHttpHandler
 			d["message"] = "Database RepairTracker: " + ex.Message;
 		}
 
-		// database del login: i ruoli del Repair Tracker devono esserci
 		try
 		{
 			List<string> presenti = new List<string>();
@@ -1525,8 +1418,6 @@ public class RepairTrackerHandler : IHttpHandler
 
 		Reply(ctx, d);
 	}
-
-	// ================= richiesta e risposta =================
 
 	private static int IdDaQuery(HttpRequest req)
 	{
@@ -1577,7 +1468,6 @@ public class RepairTrackerHandler : IHttpHandler
 		return (int)v;
 	}
 
-	// solo numeri interi
 	private static List<int> IntList(Dictionary<string, object> body, string key)
 	{
 		object v;

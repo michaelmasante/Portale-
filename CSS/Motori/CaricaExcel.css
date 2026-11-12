@@ -1,5 +1,3 @@
-/* ===== Certificati: scheda "Carica Excel" (stessa struttura di Safety, colori della pagina Certificati) ===== */
-/* Colori su :root: servono anche al pulsante "Vai a Carica Excel", che sta fuori dalla sezione */
 :root {
 	--cx-blu: #3f4254;
 	--cx-primario: #3699FF;
@@ -66,7 +64,6 @@
 		margin-top: 0;
 	}
 
-/* Area per trascinare il file */
 .cx-drop {
 	display: flex;
 	flex-direction: column;
@@ -96,7 +93,6 @@
 	line-height: 1;
 }
 
-/* Riepilogo */
 .cx-riepilogo {
 	width: 100%;
 	border-collapse: collapse;
@@ -152,7 +148,6 @@
 	padding-left: 20px;
 }
 
-/* Pulsanti */
 .cx-azioni {
 	display: flex;
 	align-items: center;
@@ -187,7 +182,6 @@
 .cx-btn-outline { background: #fff; border-color: #C9CCDA; color: var(--cx-testo); }
 .cx-btn-outline:hover { border-color: var(--cx-primario); }
 
-/* Attesa */
 .cx-loading {
 	display: flex;
 	align-items: center;
@@ -210,7 +204,6 @@
 	to { transform: rotate(360deg); }
 }
 
-/* Messaggio in basso a destra dopo il caricamento */
 .cx-toast {
 	position: fixed;
 	right: 20px;
@@ -228,7 +221,6 @@
 		display: none;
 	}
 
-/* Pagina senza dati nel database */
 .cert-vuoto {
 	padding: 20px;
 	font-weight: 600;

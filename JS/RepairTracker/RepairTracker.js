@@ -1,36 +1,9 @@
-/* ============ Repair Tracker (RepairTracker.html) ============
- Riparazioni urgenti: il manutentore apre la richiesta, poi la pratica passa tra
- Magazzino, Team Ricambi e RUO fino alla chiusura. Una sola pagina con piu' "viste",
- scelte dall'indirizzo dopo il # (#/dashboard, #/pratica/12, ...).
-
- Dati: API/RepairTracker.ashx (SQL Server: pratiche nel database RepairTracker, utenti e ruoli in PortaleLogin).
- Ruoli: Riparazioni (sola lettura), Manutentori, Magazzino, TeamRicambi, RUO (tutte le aree),
-        RUO <area> (es. "RUO CAMBI": solo quell'area), Admin Repair (budget e ruoli), Admin.
- La pagina nasconde i bottoni che l'utente non puo' usare, ma il controllo vero e' nell'API.
-
- Indice del file:
-   1. CONFIGURAZIONE  aree, stati, code, fasi del flusso (le fasi vanno tenute uguali a Fasi nell'.ashx)
-   2. STATO           i dati in memoria
-   3. REGOLE          chi puo' fare cosa, colore del pallino
-   4. UTILITA'        formattazione, chiamate al server, avvisi
-   5. VISTE           dashboard e code, coda RUO, nuova richiesta, dettaglio, gestione, analisi fornitori
-   6. EVENTI e AVVIO
-*/
 (function () {
 	"use strict";
 
 	const API = "API/RepairTracker.ashx";
-	const VERSIONE = "0.3.0"; // si vede nel footer, a destra (come nella Home)
+	const VERSIONE = "0.3.0";
 
-	/* =====================================================================
-	   1. CONFIGURAZIONE
-	   ===================================================================== */
-
-	/* Aree (UO) con i loro centri di costo, e tipi di guasto: NON sono qui.
-	   Sono scritti in API/RepairTracker.ashx (UoCentri, TipiGuasto) e arrivano con l'elenco delle pratiche
-	   (S.opzioni), cosi' la pagina e il controllo sul server usano sempre gli stessi valori. */
-
-	// Stati della pratica, nell'ordine del flusso. cls = colore del badge (in RepairTracker.css)
 	const STATI = {
 		in_magazzino:         { label: "Attesa completamento anagrafica - Magazzino", cls: "st-in-magazzino" },
 		richiesta_inoltrata:  { label: "Attesa fornitore - Team Ricambi",             cls: "st-richiesta-inoltrata" },
@@ -45,7 +18,6 @@
 		chiuso:               { label: "Chiusa",                                      cls: "st-chiuso" }
 	};
 
-	// Stati di competenza di ogni coda (pagine "Richieste ..." e numerino nel menu)
 	const CODE = {
 		magazzino: ["in_magazzino", "attesa_spedizione", "consegnato_magazzino"],
 		ricambi: ["richiesta_inoltrata", "spedito", "accettata", "rda_rilasciata", "attesa_consegna"],
@@ -54,24 +26,10 @@
 
 	const PRIORITA = { 1: "Macchina ferma", 2: "Macchina lavora" };
 
-	// Con questo tipo di riparazione si saltano fornitore, spedizione, preventivo, RUO, RDA e ordine:
-	// dal Magazzino la pratica va direttamente al Rientro (Team Ricambi). Uguale a LabElettro nell'.ashx.
+	// Uguale a LabElettro in API/RepairTracker.ashx
 	const LAB_ELETTRO = "Laboratorio Elettrotecnico";
 
-	/* Le fasi del flusso, una card ciascuna nel dettaglio, in quest'ordine.
-	   ruolo  = chi compila la fase           chi    = come si chiama nei messaggi "In attesa di ..."
-	   stato  = stato in cui la fase e' attiva avanti = stato dopo il bottone di conferma
-	   salvaBozza = nella fase attiva c'e' anche "Salva": si salvano i dati (anche incompleti) senza passare la pratica avanti
-	   istruzione = testo mostrato sopra il bottone di conferma
-	   campi: k = colonna del database, tipo = testo | testoLungo | area | centro | scelta | data | euro | intero | maiuscolo | priorita | bool
-	          (area = menu delle UO; centro = menu dei centri di costo dell'area scelta nello stesso modulo;
-	           scelta = opzioni fisse in "opzioni", oppure prese dal server con fonte: "tipiGuasto")
-	          obbl = obbligatorio (per un bool: la spunta deve essere messa),
-	          se = [k, valore]: il campo si vede (e, se obbl, e' obbligatorio) solo quando il campo k ha quel valore;
-	               quando sparisce si svuota (es. ["in_ritardo", true], ["tipo_riparazione", LAB_ELETTRO])
-	          oggi = data proposta a oggi quando la scheda si apre vuota, aiuto = nota sotto il campo,
-	          span = larghezza nel modulo (su 12), largo = riga intera nella vista
-	   ATTENZIONE: fasi, campi obbligatori e ruoli sono ripetuti in API/RepairTracker.ashx (Fasi): tenerli uguali. */
+	// Tenere uguale a Fasi in API/RepairTracker.ashx
 	const FASI = [
 		{
 			key: "manutentori", titolo: "Manutentori", icona: "bi-tools", ruolo: "Manutentori", chi: "Manutentori",
@@ -87,7 +45,6 @@
 				{ k: "tipo_guasto", label: "Tipo guasto", tipo: "scelta", fonte: "tipiGuasto" },
 				{ k: "descrizione", label: "Descrizione e note", tipo: "testoLungo", span: 12, largo: true, placeholder: "Descrivi il componente e il guasto, aggiungi le note" }
 			],
-			// nella vista compaiono anche numero, data e richiedente, che non si modificano
 			primaDeiCampi: p => [
 				{ label: "N. Pratica", valore: p.numero_pratica },
 				{ label: "Data inserimento", valore: dataIt(p.data_inserimento) },
@@ -114,7 +71,7 @@
 			]
 		},
 		{
-			key: "magazzino_2", titolo: "Magazzino — Spedizione", icona: "bi-building", ruolo: "Magazzino", chi: "Magazzino",
+			key: "magazzino_2", titolo: "Magazzino — Fase Spedizione", icona: "bi-building", ruolo: "Magazzino", chi: "Magazzino",
 			stato: "attesa_spedizione", avanti: "spedito", bottone: "Conferma e passa a Team Ricambi",
 			campi: [
 				{ k: "data_spedizione", label: "Data spedizione", tipo: "data", obbl: true, largo: true }
@@ -128,7 +85,6 @@
 				{ k: "preventivo", label: "Preventivo (€)", tipo: "euro", obbl: true },
 				{ k: "tempo_consegna_valore", label: "Tempo di consegna", tipo: "testo", obbl: true, span: 12, placeholder: "Es. 2 settimane, 10 giorni, fine mese" }
 			],
-			// nella vista il preventivo si legge meglio cosi'
 			vista: p => [
 				{ label: "Numero preventivo", valore: p.numero_preventivo || "" },
 				{ label: "Preventivo", valore: p.preventivo != null ? euro(p.preventivo) + " €" : "" },
@@ -138,10 +94,9 @@
 		{
 			key: "ruo", titolo: "RUO — Approvazione", icona: "bi-clipboard-check", ruolo: "RUO", chi: "approvazione RUO",
 			stato: "attesa_approvazione", avanti: null,
-			campi: [] // il RUO approva o rifiuta; il disponibile del mese arriva dal budget dell'area (Gestione)
+			campi: []
 		},
 		{
-			// prima la richiesta di acquisto; si passa all'ordine solo con la spunta "Rilascio RDA"
 			key: "ricambi_rda", titolo: "Team Ricambi — RDA", icona: "bi-box-seam", ruolo: "TeamRicambi", chi: "Team Ricambi",
 			stato: "accettata", avanti: "rda_rilasciata", bottone: "Rilascia RDA e passa all'ordine", salvaBozza: true,
 			campi: [
@@ -159,7 +114,6 @@
 				{ k: "data_ordine", label: "Data ordine", tipo: "data", obbl: true, oggi: true },
 				{ k: "data_consegna_fornitore", label: "Data consegna fornitore", tipo: "data", obbl: true },
 				{ k: "in_ritardo", label: "Pezzo in ritardo", tipo: "bool" },
-				// si vede ed e' obbligatoria solo con la spunta "Pezzo in ritardo"
 				{ k: "data_ritardo", label: "Data consegna ritardo", tipo: "data", obbl: true, se: ["in_ritardo", true], largo: true }
 			]
 		},
@@ -180,7 +134,6 @@
 		}
 	];
 
-	// Colonne delle tabelle (dashboard e code). filtro: "testo" = casella di ricerca, "lista" = caselle da spuntare
 	const COLONNE = [
 		{ k: "numero_pratica", label: "N. Pratica", filtro: "testo", ph: "Cerca n. pratica...", w: 130, forte: true },
 		{ k: "fornitore", label: "Fornitore", filtro: "testo", ph: "Cerca fornitore...", w: 150 },
@@ -192,7 +145,6 @@
 		{ k: "creato_il", label: "Data inserimento", w: 130 }
 	];
 
-	// Colonne dell'export Excel (tutti i campi della pratica)
 	const COLONNE_EXCEL = [
 		["N. Pratica", "numero_pratica", 14], ["Data inserimento", "data_inserimento", 16], ["Descrizione breve", "codice_componente", 22],
 		["Codice SAP", "codice_sap", 14], ["Descrizione", "descrizione", 30], ["Tipo guasto", "tipo_guasto", 18], ["Targa macchina", "macchina", 18],
@@ -211,29 +163,25 @@
 		["Richiesto da", "richiedente", 22], ["Utente richiedente", "creato_da", 16], ["Creato il", "creato_il", 18]
 	];
 
-	/* =====================================================================
-	   2. STATO
-	   ===================================================================== */
-
 	const S = {
-		io: null,              // utente collegato: { username, nome, ruoli }
-		opzioni: { aree: [], tipiGuasto: [] },  // menu a tendina, dal server: aree [{ nome, centri: [...] }], tipiGuasto [...]
-		pratiche: [],          // tutte le pratiche (dall'API)
+		io: null,
+		opzioni: { aree: [], tipiGuasto: [] },
+		pratiche: [],
 		caricato: false,
 		vista: null,
-		filtri: {},            // un oggetto filtri per ogni tabella (dashboard, magazzino, ricambi)
-		ricerca: "",           // ricerca globale della dashboard
-		colore: "",            // filtro KPI della dashboard
-		popover: null,         // filtro di colonna aperto: { vista, k }
-		pratica: null,         // pratica aperta nel dettaglio
+		filtri: {},
+		ricerca: "",
+		colore: "",
+		popover: null,
+		pratica: null,
 		log: [],
-		modifica: null,        // fase aperta in modifica
-		aperte: {},            // schede del dettaglio aperte/chiuse a mano: { magazzino_1: true, storico: false, ... }
-		campi: {},             // valori del modulo della fase in modifica
-		budget: {},            // budget del mese corrente per area (dall'elenco): { CAMBI: { importo, approvato, disponibile, ... } }
-		budgetPratica: null,   // budget del mese per l'area della pratica aperta
-		gest: { tab: "budget", mese: "", budget: null, utenti: null, ruoli: [], cerca: "" },  // vista Gestione
-		nuova: {},             // valori del modulo "Nuova richiesta"
+		modifica: null,
+		aperte: {},
+		campi: {},
+		budget: {},
+		budgetPratica: null,
+		gest: { tab: "budget", mese: "", budget: null, utenti: null, ruoli: [], cerca: "" },
+		nuova: {},
 		indietro: "#/dashboard",
 		grafici: []
 	};
@@ -243,10 +191,6 @@
 	}
 	["dashboard", "magazzino", "ricambi"].forEach(v => { S.filtri[v] = nuoviFiltri(); });
 
-	/* =====================================================================
-	   3. REGOLE (uguali a quelle dell'API)
-	   ===================================================================== */
-
 	function ha(ruolo) {
 		if (!S.io) return false;
 		const mie = (S.io.ruoli || []).map(r => String(r).toLowerCase());
@@ -254,13 +198,10 @@
 	}
 	function haUno(lista) { return String(lista).split(",").map(s => s.trim()).filter(Boolean).some(ha); }
 	function isAdmin() { return ha("Admin"); }
-	function isAdminRepair() { return ha("Admin Repair"); }   // budget e ruoli (Admin compreso)
+	function isAdminRepair() { return ha("Admin Repair"); }
 	function puoCreare() { return haUno("Manutentori,TeamRicambi"); }
-	/* RUO per area: "RUO" (o Admin) approva tutte le aree, "RUO Cambi" solo l'area Cambi, ecc.
-	   Il nome del ruolo e' "RUO " + nome dell'area, come in API/RepairTracker.ashx. */
 	const PREFISSO_RUO = "RUO ";
 
-	// Aree che l'utente approva: null = tutte, [] = nessuna
 	function areeRuo() {
 		if (!S.io) return [];
 		if (ha("RUO")) return null;
@@ -268,13 +209,11 @@
 		return S.opzioni.aree.map(a => a.nome).filter(n => mie.includes((PREFISSO_RUO + n).toLowerCase()));
 	}
 	function isRuo() { const a = areeRuo(); return a === null || a.length > 0; }
-	// Senza pratica: puo' approvare qualcosa? Con pratica: puo' approvare questa (per la sua area)?
 	function puoApprovare(p) {
 		const a = areeRuo();
 		if (a === null) return true;
 		return p ? a.includes(p.area) : a.length > 0;
 	}
-	// Pratiche in attesa del RUO da mostrare in coda: quelle delle sue aree (chi non e' RUO le vede tutte)
 	function codaRuo() {
 		const lista = S.pratiche.filter(p => p.stato === "attesa_approvazione");
 		return isRuo() ? lista.filter(p => puoApprovare(p)) : lista;
@@ -282,23 +221,19 @@
 
 	function indice(key) { return FASI.findIndex(f => f.key === key); }
 
-	// Indice della fase su cui si deve agire ora. Rifiutato si ferma sul RUO; chiuso = tutto completato.
 	function indiceCorrente(stato) {
 		if (stato === "rifiutato") return indice("ruo");
 		const i = FASI.findIndex(f => f.stato === stato);
 		return i >= 0 ? i : FASI.length;
 	}
 
-	// La pratica va in Laboratorio Elettrotecnico?
 	function isLab(p) { return !!p && p.tipo_riparazione === LAB_ELETTRO; }
 
-	// Con il Laboratorio Elettrotecnico le fasi tra il Magazzino e il Rientro non si fanno
 	function saltata(f, lab) {
 		const i = indice(f.key);
 		return !!lab && i > indice("magazzino_1") && i < indice("ricambi_4");
 	}
 
-	// "completata", "attiva", "futura" o "saltata" (lab = la pratica va in Laboratorio Elettrotecnico)
 	function statoFase(f, stato, lab) {
 		if (saltata(f, lab)) return "saltata";
 		if (f.key === "manutentori") return stato === "in_magazzino" ? "attiva" : "completata";
@@ -309,15 +244,12 @@
 		return "futura";
 	}
 
-	// La fase dopo ha gia' dati? Allora chi ha compilato questa non la puo' piu' toccare (solo Admin):
-	// si puo' correggere un proprio errore finche' chi viene dopo non ha iniziato a lavorarci.
-	// (le fasi saltate dal Laboratorio Elettrotecnico non contano: si guarda la prima fase che si fa davvero)
 	function successivaHaDati(f, p) {
 		let j = indice(f.key) + 1;
 		while (j < FASI.length && saltata(FASI[j], isLab(p))) j++;
 		const s = FASI[j];
 		if (!s) return false;
-		if (s.key === "ruo") return p.stato === "rifiutato" || indiceCorrente(p.stato) > j; // il RUO ha gia' deciso
+		if (s.key === "ruo") return p.stato === "rifiutato" || indiceCorrente(p.stato) > j;
 		if (!s.campi.length) return indiceCorrente(p.stato) > j;
 		return s.campi.some(c => c.tipo === "bool" ? p[c.k] === true : haValore(p[c.k]));
 	}
@@ -330,39 +262,29 @@
 		return ha(f.ruolo);
 	}
 
-	// Solo l'Admin cambia la decisione del RUO, e solo finche' la pratica e' ferma li'
 	function puoModificareRuo(p) {
 		return isAdmin() && (p.stato === "accettata" || p.stato === "rifiutato");
 	}
 
-	// il campo "esiste" adesso? (campi con se: solo quando l'altro campo ha quel valore)
 	function condizione(c, valori) { return !c.se || valori[c.se[0]] === c.se[1]; }
 	function obbligatorio(c, valori) { return !!c.obbl && condizione(c, valori); }
 
-	// tutti gli obbligatori compilati? (una spunta obbligatoria deve essere messa)
 	function completa(f, valori) {
 		return f.campi.every(c => !obbligatorio(c, valori) || (c.tipo === "bool" ? valori[c.k] === true : haValore(valori[c.k])));
 	}
 
-	/* Pallino: grigio = in corso prima del RUO, arancione = tocca al RUO,
-	   verde = il RUO ha approvato (anche dopo, fino alla chiusura), rosso = il RUO ha rifiutato. */
 	const PRIMA_DEL_RUO = ["in_magazzino", "richiesta_inoltrata", "attesa_spedizione", "spedito"];
 	function colore(p) {
-		if (isLab(p)) return p.stato === "chiuso" ? "green" : "grey";   // Laboratorio Elettrotecnico: niente RUO
+		if (isLab(p)) return p.stato === "chiuso" ? "green" : "grey";
 		if (p.stato === "rifiutato") return "red";
 		if (p.stato === "attesa_approvazione") return "orange";
 		if (PRIMA_DEL_RUO.includes(p.stato)) return "grey";
 		return "green";
 	}
 
-	// Riga rossa: pezzo in ritardo, finche' non e' rientrato
+	function attesaRda(p) { return p.stato === "accettata"; }
 	function inRitardo(p) { return p.in_ritardo === true && ["accettata", "rda_rilasciata", "attesa_consegna"].includes(p.stato); }
-	// Riga verde: il pezzo e' rientrato, manca solo la chiusura del Magazzino
 	function rientrata(p) { return p.stato === "consegnato_magazzino"; }
-
-	/* =====================================================================
-	   4. UTILITA'
-	   ===================================================================== */
 
 	const $ = (sel, root) => (root || document).querySelector(sel);
 	const $$ = (sel, root) => Array.from((root || document).querySelectorAll(sel));
@@ -380,13 +302,11 @@
 		return m ? new Date(+m[1], +m[2] - 1, +m[3]) : new Date(NaN);
 	}
 
-	// "2026-10-20" o "2026-10-20 14:30" -> "20/10/2026"
 	function dataIt(s) {
 		const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s || "");
 		return m ? m[3] + "/" + m[2] + "/" + m[1] : (s || "");
 	}
 
-	// 1500 -> "1.500", 1500.5 -> "1.500,50"
 	function euro(v) {
 		if (!haValore(v)) return "";
 		const n = Number(v);
@@ -398,16 +318,13 @@
 	function badgeStato(stato) { return `<span class="rt-badge ${STATI[stato] ? STATI[stato].cls : ""}">${esc(labelStato(stato))}</span>`; }
 	function dot(p) { return `<span class="rt-dot dot-${colore(p)}"></span>`; }
 	function priorita(p) { return "P" + p.priorita + " — " + (PRIORITA[p.priorita] || ""); }
-	// Tempo di consegna: ora e' testo libero (lo script 06 ha gia' aggiunto l'unita' ai valori vecchi)
 	function tempoConsegna(p) { return p.tempo_consegna_valore == null ? "" : String(p.tempo_consegna_valore); }
 	function oggiIso() {
 		const d = new Date();
 		return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
 	}
-	// Chi ha aperto la richiesta: nome (se l'API l'ha salvato), altrimenti il nome utente
 	function richiedente(p) { return p.creato_nome || p.creato_da || ""; }
 
-	// Centri di costo dell'area: [{ codice, descrizione }]
 	function centriDi(area) {
 		const a = S.opzioni.aree.find(x => x.nome === area);
 		return a ? a.centri : [];
@@ -417,14 +334,12 @@
 		const c = centriDi(area).find(x => x.codice === codice);
 		return c ? c.descrizione : "";
 	}
-	// "C6611010 — MONTAGGIO CAMBI..." (o solo il codice se non e' tra quelli dell'area)
 	function nomeCentro(area, codice) {
 		if (!haValore(codice)) return "";
 		const d = descrizioneCentro(area, codice);
 		return d ? codice + " — " + d : String(codice);
 	}
 
-	// Mese in parole: 2026, 10 -> "ottobre 2026"
 	function nomeMese(anno, mese) {
 		return new Date(anno, mese - 1, 1).toLocaleDateString("it-IT", { month: "long", year: "numeric" });
 	}
@@ -433,7 +348,6 @@
 		window.location.href = "Login.html?ReturnUrl=" + encodeURIComponent(window.location.pathname + window.location.search);
 	}
 
-	// Chiamata all'API. body presente = POST. Errore -> eccezione con il messaggio del server.
 	async function api(action, opzioni) {
 		const o = opzioni || {};
 		let url = API + "?action=" + encodeURIComponent(action);
@@ -482,10 +396,6 @@
 		box.hidden = !testo;
 	}
 
-	/* =====================================================================
-	   5. VISTE
-	   ===================================================================== */
-
 	const VISTE = ["dashboard", "magazzino", "ricambi", "ruo", "nuova", "pratica", "gestione", "fornitori"];
 
 	function mostraVista(vista) {
@@ -495,11 +405,10 @@
 		$$("#rt-nav a").forEach(a => a.classList.toggle("is-on", a.dataset.vista === vista));
 	}
 
-	// Menu: voci visibili secondo i ruoli, numerini delle code
 	function aggiornaMenu() {
 		$$("#rt-nav a").forEach(a => {
 			const r = a.dataset.ruoliRt;
-			a.hidden = a.dataset.vista === "ruo" ? !isRuo() : (!!r && !haUno(r));
+			a.hidden = a.dataset.vista === "ruo" ? !(isRuo() || ha("Riparazioni")) : (!!r && !haUno(r));
 		});
 		Object.keys(CODE).forEach(coda => {
 			const n = coda === "ruo" ? codaRuo().length : S.pratiche.filter(p => CODE[coda].includes(p.stato)).length;
@@ -517,8 +426,6 @@
 		aggiornaMenu();
 	}
 
-	// ---------------- DASHBOARD E CODE (tabella con filtri) ----------------
-
 	function praticheDellaVista(vista) {
 		if (vista === "dashboard") return S.pratiche;
 		return S.pratiche.filter(p => CODE[vista].includes(p.stato));
@@ -532,7 +439,6 @@
 		return p[k] == null ? "" : String(p[k]);
 	}
 
-	// Ricerca globale: n. pratica, fornitore, descrizione, richiedente, area, priorita', stato, data (come si vedono a schermo)
 	function matchRicerca(p) {
 		const t = S.ricerca.trim().toLowerCase();
 		if (!t) return true;
@@ -548,7 +454,7 @@
 				if (c.filtro === "lista" && f[c.k].length && !f[c.k].includes(String(p[c.k]))) return false;
 			}
 			if (vista === "dashboard") {
-				if (S.colore === "ritardo" ? !inRitardo(p) : (S.colore && colore(p) !== S.colore)) return false;
+				if (S.colore === "ritardo" ? !inRitardo(p) : S.colore === "rda" ? !attesaRda(p) : (S.colore && colore(p) !== S.colore)) return false;
 				if (!matchRicerca(p)) return false;
 			}
 			return true;
@@ -565,7 +471,6 @@
 		return any || (vista === "dashboard" && (!!S.colore || !!S.ricerca));
 	}
 
-	// Disegna intestazione + righe della tabella di una vista
 	function renderTabella(vista) {
 		const sez = $(`.rt-vista[data-vista="${vista}"]`);
 		const box = $("[data-tabella]", sez);
@@ -618,13 +523,13 @@
 				$(`[data-kpi=${c}]`).textContent = S.pratiche.filter(p => colore(p) === c).length;
 			});
 			$("[data-kpi=ritardo]").textContent = S.pratiche.filter(inRitardo).length;
+			$("[data-kpi=rda]").textContent = S.pratiche.filter(attesaRda).length;
 			$$(".rt-kpi").forEach(k => k.classList.toggle("is-on", k.dataset.colore === S.colore));
 			$("#rt-export").hidden = righe.length === 0;
 			$("#rt-ricerca-pulisci").hidden = !S.ricerca;
 		}
 	}
 
-	// Aggiorna solo l'icona/colore delle intestazioni (senza ridisegnare: il filtro aperto resta com'e')
 	function aggiornaIntestazioni(vista) {
 		$$(`.rt-vista[data-vista="${vista}"] [data-filtro-col]`).forEach(th => {
 			const on = filtroAttivo(vista, th.dataset.filtroCol);
@@ -633,8 +538,6 @@
 			if (i) i.className = "bi " + (on ? "bi-funnel-fill" : "bi-chevron-down");
 		});
 	}
-
-	// ----- filtro di colonna: un piccolo pannello sotto l'intestazione -----
 
 	function popoverEl() {
 		let el = $("#rt-popover");
@@ -709,8 +612,6 @@
 		}
 	}
 
-	// ----- export Excel delle righe visibili (dashboard) -----
-
 	async function esportaExcel() {
 		const righe = praticheFiltrate("dashboard").map(p => {
 			const r = {};
@@ -725,7 +626,7 @@
 		});
 		const nome = "repair-tracker-export-" + new Date().toISOString().slice(0, 10);
 
-		if (!window.ExcelJS) { // libreria non caricata: si scarica un CSV che Excel apre lo stesso
+		if (!window.ExcelJS) {
 			const sep = ";";
 			const cella = v => '"' + String(v).replace(/"/g, '""') + '"';
 			const csv = [COLONNE_EXCEL.map(c => cella(c[0])).join(sep)]
@@ -757,8 +658,6 @@
 		setTimeout(() => URL.revokeObjectURL(url), 1000);
 	}
 
-	// ---------------- CODA RUO ----------------
-
 	function renderRuo() {
 		const lista = codaRuo();
 		const aree = areeRuo();
@@ -784,21 +683,16 @@
 
 	function meseCorrente() { const d = new Date(); return nomeMese(d.getFullYear(), d.getMonth() + 1); }
 
-	// "12.500 €", oppure "budget non impostato"
 	function testoDisponibile(b) {
 		if (!b || b.disponibile == null) return "budget non impostato";
 		return euro(b.disponibile) + " €";
 	}
 
-	// Il preventivo supera il disponibile del mese dell'area? (solo se il budget c'e')
 	function oltreDisponibile(p, b) {
 		const budget = b || S.budget[p.area];
 		return p.preventivo != null && budget && budget.disponibile != null && Number(p.preventivo) > Number(budget.disponibile);
 	}
 
-	// ---------------- CAMPI DEI MODULI ----------------
-
-	// Il valore come si vede (vista di sola lettura)
 	function mostraValore(c, v) {
 		if (!haValore(v)) return "";
 		switch (c.tipo) {
@@ -811,8 +705,6 @@
 		}
 	}
 
-	// Un campo del modulo. form = "pratica" o "nuova" (dice dove salvare cio' che si scrive),
-	// valori = tutti i valori del modulo (servono al centro di costo per sapere l'area scelta)
 	function campoHtml(c, valori, form) {
 		const id = "rt-" + form + "-" + c.k;
 		const v = valori[c.k];
@@ -825,7 +717,6 @@
 				input = `<textarea ${attr} rows="${form === "nuova" ? 4 : 3}"${ph}>${esc(val)}</textarea>`;
 				break;
 			case "bool":
-				// la spunta ha l'etichetta accanto: si ritorna subito
 				return `<div class="rt-campo" style="--span:${c.span || 6}"><label>&nbsp;</label>` +
 					`<label class="rt-check"><input type="checkbox" ${attr}${v === true ? " checked" : ""}> ${esc(c.label)}${c.obbl ? ' <span class="rt-obbl">*</span>' : ""}</label>` +
 					(c.aiuto ? `<span class="rt-aiuto">${esc(c.aiuto)}</span>` : "") + `</div>`;
@@ -861,7 +752,6 @@
 			default:
 				input = `<input type="text" ${attr} value="${esc(val)}"${ph}>`;
 		}
-		// campo legato a un altro (se): si vede solo quando l'altro ha quel valore
 		const nascosto = !condizione(c, valori);
 		const se = c.se ? ` data-se-campo="${esc(c.se[0])}" data-se-valore="${esc(JSON.stringify(c.se[1]))}"` : "";
 		return `<div class="rt-campo" style="--span:${c.span || 6}"${se}${nascosto ? " hidden" : ""}>` +
@@ -869,7 +759,6 @@
 			(c.aiuto ? `<span class="rt-aiuto">${esc(c.aiuto)}</span>` : "") + `</div>`;
 	}
 
-	// Opzioni del menu "Centro di costo": quelle dell'area scelta (prima va scelta l'area)
 	function opzioniCentro(area, val) {
 		if (!area) return `<option value="">Prima scegli l'area</option>`;
 		const centri = centriDi(area);
@@ -877,8 +766,6 @@
 			centri.map(c => `<option value="${esc(c.codice)}"${c.codice === val ? " selected" : ""}>${esc(c.codice + " — " + c.descrizione)}</option>`).join("");
 	}
 
-	// Cambiata l'area: il menu dei centri di costo si rifà con quelli della nuova area.
-	// Se il centro scelto prima non c'e' nella nuova area, si svuota (va scelto di nuovo).
 	function aggiornaCentro(form, obj) {
 		const sel = form.querySelector('[data-tipo="centro"]');
 		if (!sel) return;
@@ -888,17 +775,15 @@
 		sel.disabled = !obj.area;
 	}
 
-	// Legge l'input e lo mette in obj (S.campi o S.nuova), con le regole dei tipi speciali
 	function leggiCampo(input, obj) {
 		const k = input.dataset.campo;
 		const tipo = input.dataset.tipo;
 		if (tipo === "maiuscolo") {
 			const a = input.selectionStart, b = input.selectionEnd;
 			input.value = input.value.toUpperCase();
-			try { input.setSelectionRange(a, b); } catch (e) { /* alcuni input non lo permettono */ }
+			try { input.setSelectionRange(a, b); } catch (e) {  }
 			obj[k] = input.value;
 		} else if (tipo === "euro") {
-			// solo cifre e una virgola; la formattazione con i punti arriva quando si esce dal campo
 			let raw = input.value.replace(/[^\d,]/g, "");
 			const v = raw.indexOf(",");
 			if (v !== -1) raw = raw.slice(0, v + 1) + raw.slice(v + 1).replace(/,/g, "");
@@ -914,7 +799,6 @@
 		}
 	}
 
-	// Cambiato un campo: i campi legati (se) compaiono o spariscono (e se spariscono si svuotano)
 	function aggiornaVisibili(form, obj) {
 		$$("[data-se-campo]", form).forEach(box => {
 			const visibile = obj[box.dataset.seCampo] === JSON.parse(box.dataset.seValore);
@@ -924,13 +808,10 @@
 				if (input) { input.value = ""; obj[input.dataset.campo] = ""; }
 			}
 		});
-		// Magazzino: con il laboratorio il bottone dice dove va la pratica
 		const b = $('[data-azione="avanza"][data-fase-btn="magazzino_1"]', form);
 		if (b) b.lastChild.textContent = obj.tipo_riparazione === LAB_ELETTRO
 			? "Conferma e passa al Rientro (Laboratorio Elettrotecnico)" : FASI[indice("magazzino_1")].bottone;
 	}
-
-	// ---------------- NUOVA RICHIESTA ----------------
 
 	function renderNuova() {
 		S.nuova = { priorita: 2 };
@@ -942,7 +823,7 @@
 
 	async function inviaNuova() {
 		const n = S.nuova;
-		const manca = FASI[0].campi.find(c => c.obbl && !haValore(n[c.k])); // il primo obbligatorio vuoto, nell'ordine del modulo
+		const manca = FASI[0].campi.find(c => c.obbl && !haValore(n[c.k]));
 		const errore = manca ? "Campo obbligatorio: " + manca.label + "." : "";
 		const box = $("#rt-nuova-errore");
 		if (errore) { box.textContent = errore; box.hidden = false; return; }
@@ -964,8 +845,6 @@
 		}
 	}
 
-	// ---------------- DETTAGLIO PRATICA ----------------
-
 	async function apriPratica(id) {
 		S.modifica = null;
 		S.aperte = {};
@@ -977,7 +856,6 @@
 	async function caricaPratica(id) {
 		try {
 			const data = await api("pratica", { id: id });
-			// se la pratica e' andata avanti (o indietro) si torna alle schede di base: aperta solo quella attiva
 			const prima = S.pratica && S.pratica.id === data.pratica.id ? S.pratica.stato : null;
 			if (prima !== data.pratica.stato) S.aperte = {};
 			S.pratica = data.pratica;
@@ -1011,7 +889,7 @@
 
 	function renderFase(f, p) {
 		const st = statoFase(f, p.stato, isLab(p));
-		const classe = f.key === "manutentori" ? "completata" : st; // la card Manutentori appare sempre compilata
+		const classe = f.key === "manutentori" ? "completata" : st;
 		let corpo;
 		if (st === "saltata") corpo = `<div class="rt-fase-body rt-attesa">Non serve: riparazione in ${esc(LAB_ELETTRO)}.</div>`;
 		else if (f.key === "ruo") corpo = corpoRuo(p, st);
@@ -1023,7 +901,6 @@
 		}
 		else if (st === "futura") corpo = attesaCompilazione();
 		else {
-			// fase attiva: se qualcuno ha gia' salvato qualcosa (Salva senza Conferma), si vedono i dati
 			const iniziata = f.campi.some(c => c.tipo === "bool" ? p[c.k] === true : haValore(p[c.k]));
 			corpo = (iniziata ? vistaFase(f, p) : "") + `<div class="rt-fase-body${iniziata ? " rt-pt0" : ""}">` + (puoModificare(f, p)
 				? `<button type="button" class="rt-btn rt-btn-outline rt-btn-sm" data-modifica="${f.key}"><i class="bi bi-pencil"></i>${iniziata ? "Continua a compilare" : "Compila dati"}</button>`
@@ -1034,16 +911,13 @@
 		return scheda(f.key, "fase-" + classe, f.icona, f.titolo, nota, corpo);
 	}
 
-	/* ----- schede apribili: di base e' aperta solo la fase su cui si lavora adesso ----- */
-
-	// La fase "attiva in questo momento": quella dello stato attuale (nessuna se la pratica e' chiusa)
 	function faseCorrente(p) {
 		const f = FASI[indiceCorrente(p.stato)];
 		return f ? f.key : null;
 	}
 
 	function schedaAperta(key) {
-		if (S.modifica === key) return true;                       // chi sta scrivendo non perde il modulo
+		if (S.modifica === key) return true;
 		if (Object.prototype.hasOwnProperty.call(S.aperte, key)) return S.aperte[key];
 		return key === faseCorrente(S.pratica);
 	}
@@ -1059,11 +933,10 @@
 			`<div class="rt-fase-corpo">${corpo}</div></div>`;
 	}
 
-	// Apre/chiude una scheda senza ridisegnare la pagina (un modulo aperto altrove resta com'e')
 	function toggleScheda(key) {
 		const el = $(`#rt-pratica [data-fase="${key}"]`);
 		if (!el) return;
-		const aperta = el.classList.contains("is-chiusa"); // era chiusa: ora si apre
+		const aperta = el.classList.contains("is-chiusa");
 		S.aperte[key] = aperta;
 		el.classList.toggle("is-chiusa", !aperta);
 		const b = $("[data-toggle-fase]", el);
@@ -1079,7 +952,7 @@
 		if (f.vista) voci = f.vista(p);
 		else {
 			voci = (f.primaDeiCampi ? f.primaDeiCampi(p) : []).concat(
-				f.campi.filter(c => condizione(c, p))       // campo legato a un altro (se) che ora non vale: non si mostra
+				f.campi.filter(c => condizione(c, p))
 					.map(c => ({
 						label: c.labelVista || c.label.replace(/\s*\(€\)$/, ""),
 						valore: c.tipo === "centro" ? nomeCentro(p.area, p[c.k]) : mostraValore(c, p[c.k]),
@@ -1107,7 +980,6 @@
 			`<div class="rt-actions">${bottoni.join("")}</div></div>`;
 	}
 
-	// Avanza (e Salva per i Manutentori) restano spenti finche' mancano i campi obbligatori
 	function aggiornaBottoniModulo() {
 		if (!S.modifica) return;
 		const f = FASI[indice(S.modifica)];
@@ -1123,8 +995,6 @@
 		const approvata = !!p.data_approvazione && p.stato !== "rifiutato";
 		const b = S.budgetPratica;
 
-		// Disponibile: se la pratica e' gia' approvata si mostra quello che c'era al momento dell'approvazione,
-		// altrimenti quello di adesso (budget del mese dell'area meno le pratiche gia' approvate nel mese)
 		const disponibile = approvata
 			? ["Disponibile all'approvazione", p.disponibile_mese != null ? euro(p.disponibile_mese) + " €" : "budget non impostato"]
 			: ["Disponibile " + meseCorrente() + " — " + (p.area || "area"), testoDisponibile(b)];
@@ -1162,7 +1032,6 @@
 					? `<div class="rt-fase-body rt-pt0"><button type="button" class="rt-btn rt-btn-outline rt-btn-sm" data-modifica="ruo"><i class="bi bi-pencil"></i>Modifica</button></div>` : "");
 		}
 
-		// attiva: decide il RUO dell'area della pratica (o il RUO di tutte le aree)
 		if (puoApprovare(p)) return riepilogo + bottoni(approva + rifiuta);
 		return riepilogo + `<div class="rt-fase-body"><span class="rt-muted rt-small">In attesa di approvazione RUO${p.area ? " " + esc(p.area) : ""}</span></div>`;
 	}
@@ -1192,11 +1061,10 @@
 		const f = FASI[indice(key)];
 		S.campi = {};
 		f.campi.forEach(c => { S.campi[c.k] = p[c.k] == null ? "" : p[c.k]; });
-		// un centro di costo che non e' tra quelli dell'area (es. scritto a mano prima dei menu) va scelto di nuovo
 		if ("centro_costo" in S.campi && !codiciCentri(S.campi.area).includes(S.campi.centro_costo)) S.campi.centro_costo = "";
 		f.campi.forEach(c => {
 			if (c.tipo === "bool") S.campi[c.k] = p[c.k] === true;
-			if (c.oggi && !haValore(S.campi[c.k])) S.campi[c.k] = oggiIso();   // data proposta: oggi
+			if (c.oggi && !haValore(S.campi[c.k])) S.campi[c.k] = oggiIso();
 		});
 		S.modifica = key;
 		renderPratica();
@@ -1212,12 +1080,11 @@
 		return campi;
 	}
 
-	// Dopo ogni modifica: si ricarica la pratica (dati + storico) e, in sottofondo, l'elenco per i numerini del menu
 	async function dopoModifica(messaggio) {
 		S.modifica = null;
 		avviso(messaggio);
 		await caricaPratica(S.pratica.id);
-		caricaElenco().catch(() => { /* i numerini si aggiornano alla prossima apertura */ });
+		caricaElenco().catch(() => {  });
 	}
 
 	async function eseguiInPratica(fn, bottone) {
@@ -1247,7 +1114,7 @@
 			const body = { id: S.pratica.id, card: key, campi: valoriFase(f) };
 			let r = await api("salva", { body: body });
 			if (r.regressione) {
-				if (!confirm(r.message)) { if (bottone) bottone.disabled = false; return; } // annullato: nulla e' stato scritto
+				if (!confirm(r.message)) { if (bottone) bottone.disabled = false; return; }
 				body.conferma = true;
 				r = await api("salva", { body: body });
 			}
@@ -1262,8 +1129,6 @@
 			await dopoModifica(esito === "accettata" ? "Pratica approvata." : "Pratica rifiutata.");
 		}, bottone);
 	}
-
-	// ---------------- GESTIONE (Admin Repair): budget mensile e ruoli ----------------
 
 	function renderGestione() {
 		const g = S.gest;
@@ -1294,7 +1159,6 @@
 			`<td>${a.pratiche}</td></tr>`).join("");
 	}
 
-	// "1.500,50" -> 1500.5 ; "" -> null
 	function numeroDaEuro(testo) {
 		const t = String(testo || "").replace(/\./g, "").replace(",", ".").trim();
 		if (!t) return null;
@@ -1315,7 +1179,7 @@
 			S.gest.budget = await api("budget_salva", { body: { anno: anno, mese: mese, importi: importi } });
 			renderBudget();
 			avviso("Budget di " + nomeMese(anno, mese) + " salvato.");
-			caricaElenco().catch(() => {});   // coda RUO e schede usano il budget del mese corrente
+			caricaElenco().catch(() => {});
 		} catch (e) {
 			avviso(e.message, true);
 		} finally {
@@ -1362,16 +1226,14 @@
 			u.ruoli = ruoli;
 			const r = S.gest.ruoli.find(x => x.id === rid);
 			avviso((input.checked ? "Dato " : "Tolto ") + r.nome + " a " + u.nome + ".");
-			if (S.io && u.username.toLowerCase() === String(S.io.username).toLowerCase()) caricaElenco().catch(() => {}); // i miei ruoli: menu aggiornato
+			if (S.io && u.username.toLowerCase() === String(S.io.username).toLowerCase()) caricaElenco().catch(() => {});
 		} catch (e) {
-			input.checked = !input.checked;   // si torna com'era
+			input.checked = !input.checked;
 			avviso(e.message, true);
 		} finally {
 			input.disabled = false;
 		}
 	}
-
-	// ---------------- TEMA (scuro di base, chiaro a scelta; la scelta resta nel browser) ----------------
 
 	function temaChiaro() { return document.documentElement.getAttribute("data-tema") === "chiaro"; }
 
@@ -1389,23 +1251,18 @@
 		const chiaro = !temaChiaro();
 		if (chiaro) document.documentElement.setAttribute("data-tema", "chiaro");
 		else document.documentElement.removeAttribute("data-tema");
-		try { localStorage.setItem("rt_tema", chiaro ? "chiaro" : "scuro"); } catch (e) { /* senza memoria del browser vale solo per questa visita */ }
+		try { localStorage.setItem("rt_tema", chiaro ? "chiaro" : "scuro"); } catch (e) {  }
 		aggiornaBottoneTema();
-		if (S.vista === "fornitori") renderFornitori();   // i grafici prendono i colori del tema
+		if (S.vista === "fornitori") renderFornitori();
 	}
 
-	// colore di una variabile del CSS (per i grafici)
 	function coloreTema(nome) { return getComputedStyle(document.documentElement).getPropertyValue(nome).trim(); }
-
-	// ---------------- ANALISI FORNITORI ----------------
 
 	function giorniTra(a, b) {
 		if (!a || !b) return null;
 		return Math.round((parseData(b) - parseData(a)) / 864e5);
 	}
 
-	// Tempo promesso in giorni, letto dal testo: "10 giorni", "2 settimane", "1 mese", "15" (= giorni).
-	// Se nel testo non c'e' un numero (es. "fine mese") la pratica non conta nella media.
 	function tempoPromesso(p) {
 		const t = tempoConsegna(p).toLowerCase();
 		const m = /(\d+(?:[.,]\d+)?)\s*([a-z]*)/.exec(t);
@@ -1429,7 +1286,6 @@
 		return Array.from(gruppi.entries()).map(([fornitore, lista]) => {
 			let puntuali = 0, inRitardo = 0;
 			lista.forEach(p => {
-				// puntuale se il rientro e' entro la data di ritardo (se c'e') o la data consegna fornitore
 				const rif = p.data_ritardo || p.data_consegna_fornitore;
 				if (rif && p.data_rientro_effettiva) {
 					if (parseData(p.data_rientro_effettiva) <= parseData(rif)) puntuali++; else inRitardo++;
@@ -1446,7 +1302,6 @@
 		}).sort((a, b) => b.numero - a.numero);
 	}
 
-	// Giorni di ritardo medi (rientro - data attesa) per mese di rientro, per i 5 fornitori con piu' pratiche
 	function andamentoMensile(pratiche, stats) {
 		const top = stats.slice(0, 5).map(s => s.fornitore);
 		const mesi = new Set();
@@ -1528,10 +1383,6 @@
 		}
 	}
 
-	/* =====================================================================
-	   6. EVENTI e AVVIO
-	   ===================================================================== */
-
 	async function route() {
 		const m = /^#\/([a-z]+)(?:\/(\d+))?/.exec(window.location.hash || "");
 		let vista = m ? m[1] : "dashboard";
@@ -1539,7 +1390,7 @@
 		if (!VISTE.includes(vista) || (vista === "pratica" && !id)) vista = "dashboard";
 		if (vista === "nuova" && !puoCreare()) { window.location.replace("#/dashboard"); return; }
 		if (vista === "gestione" && !isAdminRepair()) { window.location.replace("#/dashboard"); return; }
-		if (vista !== "pratica" && vista !== "nuova") S.indietro = "#/" + vista; // il bottone "indietro" del dettaglio torna qui
+		if (vista !== "pratica" && vista !== "nuova") S.indietro = "#/" + vista;
 
 		mostraVista(vista);
 		erroreGenerale("");
@@ -1549,7 +1400,6 @@
 			if (vista === "nuova") { renderNuova(); return; }
 			if (vista === "gestione") { renderGestione(); return; }
 
-			// le liste si disegnano subito con i dati che ci sono e si ridisegnano con quelli freschi
 			const disegna = () => {
 				if (S.vista !== vista) return;
 				if (vista === "ruo") renderRuo();
@@ -1567,7 +1417,6 @@
 	function collegaEventi() {
 		window.addEventListener("hashchange", route);
 
-		// ---- tabelle ----
 		document.addEventListener("click", ev => {
 			const t = ev.target;
 
@@ -1592,8 +1441,6 @@
 			const reset = t.closest("[data-azione=reset]");
 			if (reset) { resetFiltri(S.vista); return; }
 
-			// ---- dettaglio pratica ----
-			// ---- gestione ----
 			const tab = t.closest(".rt-tab");
 			if (tab) { S.gest.tab = tab.dataset.tab; renderGestione(); return; }
 
@@ -1626,7 +1473,6 @@
 
 		window.addEventListener("resize", chiudiPopover);
 
-		// filtro di colonna: testo e caselle
 		document.addEventListener("input", ev => {
 			const t = ev.target;
 			if (t.matches("[data-filtro-testo]") && S.popover) {
@@ -1650,7 +1496,7 @@
 				return;
 			}
 			if (t.id === "rt-utenti-cerca") { S.gest.cerca = t.value; renderUtenti(); return; }
-			if (t.matches("[data-budget-area]")) {   // budget: solo cifre, punti e una virgola
+			if (t.matches("[data-budget-area]")) {
 				let raw = t.value.replace(/[^\d.,]/g, "");
 				const v = raw.indexOf(",");
 				if (v !== -1) raw = raw.slice(0, v + 1) + raw.slice(v + 1).replace(/[,.]/g, "");
@@ -1671,7 +1517,7 @@
 				return;
 			}
 			const form = t.closest("[data-form]");
-			if (form && t.dataset.campo) { // select e date
+			if (form && t.dataset.campo) {
 				const obj = form.dataset.form === "nuova" ? S.nuova : S.campi;
 				leggiCampo(t, obj);
 				if (t.dataset.tipo === "area") aggiornaCentro(form, obj);
@@ -1683,7 +1529,6 @@
 			if (t.id === "rt-budget-mese" && t.value) { S.gest.mese = t.value; caricaBudget(); }
 		});
 
-		// importo: quando si esce dal campo compare 1.500,50
 		document.addEventListener("focusout", ev => {
 			const t = ev.target;
 			if (t.dataset && t.dataset.budgetArea !== undefined) {
@@ -1711,8 +1556,6 @@
 		$("#rt-tema").addEventListener("click", cambiaTema);
 	}
 
-	/* Versione nel footer, a destra. Il footer arriva dopo (lo carica header-loader.js):
-	   si aspetta che compaia, come fa Portal.js nella Home. */
 	function versioneNelFooter() {
 		const placeholder = document.getElementById("footer-placeholder");
 		if (!placeholder) return;

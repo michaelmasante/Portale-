@@ -1,16 +1,7 @@
-/* ============ Safety (Safety.html) ============
-   Rifacimento della vecchia app Angular "Safety" come pagina del Portale.
-   - Tabelle Worked Hours / Total LTI / Lost Days in SOLA LETTURA, per perimetro (Manufacturing / Non-Manufacturing)
-     e, per MFG, per area (BUS, POWERTRAIN EU+AMEA, TRUCK EU, LATAM come nella vecchia app).
-   - Carica Excel: il file viene letto nel browser (SheetJS), controllato, confrontato col database e poi inviato
-     ad API/Safety.ashx, che sostituisce i dati in un'unica transazione. Solo con il ruolo "Safety Upload" (o Admin).
-   - Presentazione: anteprima delle slide ed export PowerPoint (SafetyReport.js).
-   Calcoli in SafetyCalcoli.js. Versione nel piè di pagina: VERSIONE. */
-
 (function () {
 	"use strict";
 
-	const VERSIONE = "0.2.1";
+	const VERSIONE = "0.2.2";
 	const API = "API/Safety.ashx";
 	const C = window.SafetyCalcoli;
 	const R = window.SafetyReport;
@@ -29,18 +20,16 @@
 		perimetro: leggiMemoria("sf_perimetro") === "NMFG" ? "NMFG" : "MFG",
 		vista: "wh",
 		area: { MFG: "MFG", NMFG: "NMFG" },
-		dati: {},             // perimetro -> risposta di ?action=dati
-		img: null,            // immagini standard (copertina, loghi)
-		report: null,         // { chiave, slides }
-		testi: {},            // testi della presentazione per perimetro (modificabili)
-		copertina: null,      // immagine copertina scelta dall'utente (data URL)
-		file: null            // analisi del file Excel da caricare
+		dati: {},
+		img: null,
+		report: null,
+		testi: {},
+		copertina: null,
+		file: null
 	};
 
 	function leggiMemoria(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
-	function scriviMemoria(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* senza memoria del browser vale solo per questa visita */ } }
-
-	/* ================= API ================= */
+	function scriviMemoria(k, v) { try { localStorage.setItem(k, v); } catch (e) {  } }
 
 	async function api(azione, opzioni) {
 		const o = opzioni || {};
@@ -64,8 +53,6 @@
 		stato.dati[perimetro] = d;
 		return d;
 	}
-
-	/* ================= navigazione ================= */
 
 	function leggiHash() {
 		const p = location.hash.replace(/^#\/?/, "").split("/");
@@ -138,8 +125,6 @@
 		return m ? `${m[3]}/${m[2]}/${m[1]} ${m[4]}` : s;
 	}
 
-	/* ================= tabelle ================= */
-
 	function aree(d) {
 		if (d.perimetro !== "MFG") return [{ chiave: "NMFG", etichetta: "NMFG", locs: null }];
 		const l = [{ chiave: "MFG", etichetta: "MFG", locs: null }];
@@ -156,7 +141,6 @@
 		return Array.from(s).sort((a, b) => b - a);
 	}
 
-	// formato italiano con il punto delle migliaia anche sotto 10.000 (toLocaleString "it-IT" scrive 7989 ma 10.596)
 	function numero(v, dec) {
 		if (v == null) return "—";
 		const f = Math.pow(10, dec);
@@ -218,11 +202,6 @@
 		$$("input[data-mezzo]", box).forEach(c => { c.indeterminate = true; });
 	}
 
-	/* ================= location selezionate (spunte) =================
-	   Come nella vecchia app: le spunte decidono quali location entrano nella presentazione (e nei totali delle tabelle).
-	   Si salvano nel browser (chiave sf_esclusi_MFG / sf_esclusi_NMFG) come elenco delle location TOLTE:
-	   una location nuova nel file è quindi sempre inclusa finché non si toglie la spunta. Valgono per tutti gli anni e i parametri. */
-
 	function esclusi(perimetro) {
 		try { return new Set(JSON.parse(leggiMemoria("sf_esclusi_" + perimetro) || "[]").map(x => String(x).toLowerCase())); }
 		catch (e) { return new Set(); }
@@ -244,7 +223,6 @@
 		mostraTabelle(stato.dati[per]);
 	}
 
-	/* Copia dei dati senza le location tolte: è quella che va alla presentazione */
 	function datiSelezionati(d) {
 		const ex = esclusi(d.perimetro);
 		if (!ex.size) return { dati: d, tolte: [] };
@@ -263,8 +241,6 @@
 		const gruppi = (d.gruppi || []).map(g => ({ gruppo: g.gruppo, location: g.location.filter(l => !ex.has(l.toLowerCase())) }));
 		return { dati: Object.assign({}, d, { valori, gruppi }), tolte: C.ordina(Array.from(tolte)) };
 	}
-
-	/* ================= presentazione ================= */
 
 	function mesiDisponibili(d) {
 		const out = [];
@@ -350,7 +326,6 @@
 		exp.disabled = false;
 	}
 
-	// --ppi = pixel per pollice dell'anteprima (serve alle dimensioni dei caratteri)
 	const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(voci => voci.forEach(v => v.target.style.setProperty("--ppi", (v.contentRect.width / 13.333) + "px"))) : null;
 	function osserva(el) {
 		if (ro) ro.observe(el);
@@ -389,8 +364,6 @@
 		}
 	}
 
-	/* ================= carica Excel ================= */
-
 	function leggiFileExcel(file) {
 		return new Promise((res, rej) => {
 			if (!window.XLSX) { rej(new Error("La libreria per leggere i file Excel (JS/Safety/lib/xlsx-0.18.5.full.min.js) non si è caricata.")); return; }
@@ -423,7 +396,6 @@
 			if (doppi.length) errori.push("Ci sono due fogli per lo stesso perimetro: " + doppi.join(", ") + ".");
 			validi.forEach(f => { if (f.perimetro === "NMFG" && f.blocchi.some(b => b.parametro === "DAYS")) avvisi.push('Foglio NMFG: il blocco "days lost" verrà caricato ma la pagina non lo usa (non c\'era neanche prima).'); });
 
-			// confronto col database
 			const db = {};
 			for (const f of validi) db[f.perimetro] = await caricaDati(f.perimetro, true);
 			const righe = [];
@@ -520,8 +492,6 @@
 		}
 	}
 
-	/* ================= tema ================= */
-
 	function temaChiaro() { return document.documentElement.getAttribute("data-tema") === "chiaro"; }
 	function scriviTema() {
 		$("#sf-tema").innerHTML = temaChiaro() ? '<i class="bi bi-moon-stars"></i>Tema scuro' : '<i class="bi bi-sun"></i>Tema chiaro';
@@ -533,8 +503,6 @@
 		scriviMemoria("sf_tema", chiaro ? "chiaro" : "scuro");
 		scriviTema();
 	}
-
-	/* ================= piè di pagina ================= */
 
 	function versioneFooter() {
 		const ph = $("#footer-placeholder");
@@ -549,8 +517,6 @@
 		const mo = new MutationObserver(() => { if (prova()) mo.disconnect(); });
 		mo.observe(ph, { childList: true, subtree: true });
 	}
-
-	/* ================= avvio ================= */
 
 	function avvia() {
 		scriviTema();
@@ -568,7 +534,6 @@
 			mostraTabelle(stato.dati[stato.perimetro]);
 		});
 
-		// presentazione
 		$("#sf-mese").addEventListener("change", () => { compilaTesti(testi(stato.dati[stato.perimetro], meseScelto(stato.dati[stato.perimetro]))); aggiornaAnteprima(); });
 		["#sf-cover-titolo", "#sf-cover-sotto", "#sf-cover-data", "#sf-note"].forEach(s => $(s).addEventListener("input", testoCambiato));
 		$("#sf-export").addEventListener("click", esporta);
@@ -587,7 +552,6 @@
 			aggiornaAnteprima();
 		});
 
-		// carica Excel
 		const drop = $("#sf-drop");
 		$("#sf-file").addEventListener("change", e => { const f = e.target.files[0]; if (f) { $("#sf-drop-testo").textContent = f.name; analizza(f); } });
 		["dragenter", "dragover"].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.add("is-over"); }));

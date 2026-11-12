@@ -193,7 +193,6 @@
     font-size: 13px;
 }
 
-/* ===== Riga cliccabile: apre il dettaglio ===== */
 .tabulator-row {
     cursor: pointer;
 }
@@ -253,7 +252,6 @@
             min-width: 34px;
         }
 
-/* Rettangolini dei mesi: rosso = deprecato, verde = non deprecato */
 .cert-month-bar {
     height: 10px;
     border-radius: 2px;
@@ -267,12 +265,10 @@
     background-color: #2e9e4f;
 }
 
-/* Misto: almeno un PN deprecato e almeno uno no -> verde con strisce rosse */
 .cert-month-bar--mixed {
     background: repeating-linear-gradient(-45deg, #2e9e4f 0 6px, #ce201b 6px 10px);
 }
 
-/* ===== Schede: Per PN Motore / Per Tag ===== */
 .tabs-container {
     display: flex;
     gap: 6px;
@@ -298,7 +294,6 @@
         border-color: #007bff;
     }
 
-/* ===== Indicatore "Caricamento" ===== */
 .loading-indicator {
     display: flex;
     align-items: center;
@@ -324,7 +319,6 @@
     }
 }
 
-/* ===== Vista "Per Tag" ===== */
 .tag-month-btn {
     padding: 4px 2px;
     border: 2px solid transparent;
@@ -381,7 +375,6 @@
         border-color: #007bff;
     }
 
-/* Elenco PN dentro un tag: intestazioni ordinabili e riga dei filtri */
 .tag-sort-th {
     cursor: pointer;
     user-select: none;
@@ -456,14 +449,12 @@
     font-style: italic;
 }
 
-/* Riga "File TAG aggiornato al ..." sotto i mesi */
 .cert-tag-updated {
     margin-top: 8px;
     font-size: 12px;
     color: #666666;
 }
 
-/* Per cambiare tonalità basta modificare questi colori */
 :root {
     --grid-blue-accent: #3f4254;
     --grid-blue-text: #ffffff;
@@ -520,7 +511,6 @@
             border-color: var(--grid-blue-accent);
         }
 
-/* Linea sotto le schede e tabelle di dettaglio (righe espanse) */
 .tabs-container {
     border-bottom: 2px solid var(--grid-blue-accent);
 }
@@ -544,7 +534,6 @@
     background-color: var(--grid-blue-line);
 }
 
-/* ===== Vista "Per Mese" ===== */
 .month-view {
     padding-top: 14px;
 }
@@ -553,8 +542,6 @@
     margin-top: 14px;
 }
 
-/* Larghezze fisse: l'elenco dei PN aperto sotto un tag è molto largo e scorre da solo,
-   senza allargare la tabella dei tag */
 .month-tag-table {
     width: 100%;
     table-layout: fixed;

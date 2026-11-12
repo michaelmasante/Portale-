@@ -1,5 +1,3 @@
-/* Gestione utenti: attivazione, sblocco e ruoli. Tutto passa da API/GestioneUtenti.ashx,
-   che controlla sul server che chi chiama abbia il ruolo Admin. */
 document.addEventListener("DOMContentLoaded", function () {
 	const API = "API/GestioneUtenti.ashx";
 	const head = document.getElementById("gu-head");
@@ -112,7 +110,6 @@ document.addEventListener("DOMContentLoaded", function () {
 		}).join("");
 	}
 
-	/* ruoli: ogni spunta salva subito tutti i ruoli di quell'utente */
 	body.addEventListener("change", function (ev) {
 		const box = ev.target;
 		if (!box.matches("input[data-ruolo]")) return;
@@ -129,13 +126,12 @@ document.addEventListener("DOMContentLoaded", function () {
 				avviso("Ruoli salvati per " + (u ? u.username : "l'utente") + ".");
 			})
 			.catch(err => {
-				box.checked = !box.checked; // torna com'era
+				box.checked = !box.checked;
 				avviso(err.message, true);
 			})
 			.finally(() => inputs.forEach(x => { x.disabled = x.dataset.wasDisabled === "1"; }));
 	});
 
-	/* attiva / disattiva / sblocca */
 	body.addEventListener("click", function (ev) {
 		const btn = ev.target.closest("button[data-azione]");
 		if (!btn) return;

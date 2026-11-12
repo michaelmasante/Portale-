@@ -1,21 +1,5 @@
 <%@ WebHandler Language="C#" Class="GestioneUtentiHandler" %>
 
-/*
- * Gestione utenti del Portale (pagina GestioneUtenti.html). Solo per chi ha il ruolo Admin:
- * il controllo e' fatto qui, sul server, a ogni richiesta (non basta nascondere la pagina).
- *
- * Azioni:
- *   GET  ?action=elenco      utenti, ruoli e chi ha quale ruolo
- *   POST ?action=attiva      { id, attivo }   attiva / disattiva un utente
- *   POST ?action=sblocca     { id }           toglie il blocco per password sbagliate
- *   POST ?action=ruoli       { id, ruoli: [idRuolo, ...] }   sostituisce i ruoli dell'utente
- *
- * Un admin non puo' disattivare se stesso ne' togliersi il ruolo Admin (per non restare tutti fuori).
- * Ogni modifica finisce in AccessiLog con Evento = "Gestione".
- * Stesso database e stessa stringa di connessione di Auth.ashx ("PortaleLogin" nel Web.config).
- * Codice in C# 5, lettere accentate scritte come è (vedi Auth.ashx).
- */
-
 using System;
 using System.Collections.Generic;
 using System.Configuration;
@@ -95,9 +79,6 @@ public class GestioneUtentiHandler : IHttpHandler
 		}
 	}
 
-	// ================= controllo Admin =================
-
-	// Restituisce l'Id dell'admin collegato; altrimenti 403.
 	private static int RequireAdmin(HttpContext ctx, SqlConnection cn)
 	{
 		if (ctx.User == null || !ctx.User.Identity.IsAuthenticated) throw new ForbiddenException();
@@ -114,8 +95,6 @@ public class GestioneUtentiHandler : IHttpHandler
 			return (int)v;
 		}
 	}
-
-	// ================= azioni =================
 
 	private static void List(HttpContext ctx, SqlConnection cn)
 	{
@@ -217,14 +196,13 @@ public class GestioneUtentiHandler : IHttpHandler
 			}
 			if (name == null) throw new UserException("Utente non trovato. Ricarica la pagina.");
 
-			// rimuove solo i ruoli tolti e aggiunge solo quelli nuovi (le date delle altre assegnazioni restano)
 			StringBuilder sbLista = new StringBuilder();
 			foreach (int r in ruoli)
 			{
 				if (sbLista.Length > 0) sbLista.Append(',');
 				sbLista.Append(r.ToString(System.Globalization.CultureInfo.InvariantCulture));
 			}
-			string lista = sbLista.Length == 0 ? "-1" : sbLista.ToString(); // -1: nessun ruolo ha questo Id (con NULL il DELETE non toglierebbe nulla)
+			string lista = sbLista.Length == 0 ? "-1" : sbLista.ToString();
 			using (SqlCommand cmd = new SqlCommand(
 				"DELETE FROM dbo.UtentiRuoli WHERE UserId = @id AND RuoloId NOT IN (" + lista + "); " +
 				"INSERT INTO dbo.UtentiRuoli (UserId, RuoloId, AssegnatoDa) " +
@@ -241,8 +219,6 @@ public class GestioneUtentiHandler : IHttpHandler
 		Log(ctx, cn, adminName, "Ruoli di " + name + " cambiati");
 		Ok(ctx);
 	}
-
-	// ================= database =================
 
 	private delegate void AddParams(SqlCommand cmd);
 
@@ -276,7 +252,6 @@ public class GestioneUtentiHandler : IHttpHandler
 		return cn;
 	}
 
-	// registro: un errore qui non deve far fallire la modifica gia' fatta
 	private static void Log(HttpContext ctx, SqlConnection cn, string adminName, string detail)
 	{
 		try
@@ -301,8 +276,6 @@ public class GestioneUtentiHandler : IHttpHandler
 		if (s == null) return null;
 		return s.Length > max ? s.Substring(0, max) : s;
 	}
-
-	// ================= richiesta e risposta =================
 
 	private static Dictionary<string, object> ReadJson(HttpContext ctx)
 	{
@@ -348,7 +321,6 @@ public class GestioneUtentiHandler : IHttpHandler
 		return (bool)v;
 	}
 
-	// solo numeri interi: e' cio' che rende sicuro scrivere la lista dentro la query
 	private static List<int> IntList(Dictionary<string, object> body, string key)
 	{
 		object v;

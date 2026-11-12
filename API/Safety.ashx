@@ -1,23 +1,5 @@
 <%@ WebHandler Language="C#" Class="SafetyHandler" %>
 
-/*
- * Safety (pagina Safety.html). Dati di sicurezza MFG / NMFG nel database "Safety"
- * (stringa di connessione "Safety" nel Web.config). Utenti e ruoli da PortaleLogin, come le altre pagine.
- *
- * Azioni:
- *   GET  ?health=1                         controllo veloce del database
- *   GET  ?action=dati&perimetro=MFG|NMFG   valori, gruppi, target, ultimo caricamento
- *   POST ?action=carica                    { file, perimetri: [ { perimetro, dati: [ { parametro, anno, righe: [[location, v1..v12], ...] } ] } ] }
- *
- * Il caricamento SOSTITUISCE, per ogni perimetro/parametro/anno presente nel file, tutti i valori nel database
- * (in un'unica transazione: o va tutto o non cambia niente). Anni e parametri non presenti nel file restano come sono.
- * I dati non si modificano piu' dalla pagina: l'unico modo per scrivere e' il file Excel.
- *
- * Ruoli: "Safety" vede tabelle e presentazione; "Safety Upload" carica il file; Admin fa tutto.
- * Il controllo e' fatto qui, sul server, a ogni richiesta.
- * C# 5 (compilatore di default di ASP.NET), come RepairTracker.ashx.
- */
-
 using System;
 using System.Collections.Generic;
 using System.Configuration;
@@ -35,6 +17,7 @@ public class SafetyHandler : IHttpHandler
 	private const string LoginConnection = "PortaleLogin";
 	private const string Admin = "Admin";
 	private const string RuoloUpload = "Safety Upload";
+	// Tenere uguali al meta "ruoli" di Safety.html
 	private static readonly string[] RuoliAccesso = { "Safety", RuoloUpload, Admin };
 	private static readonly string[] Perimetri = { "MFG", "NMFG" };
 	private static readonly string[] Parametri = { "WH", "LTI", "DAYS" };
@@ -123,8 +106,6 @@ public class SafetyHandler : IHttpHandler
 		}
 	}
 
-	// ================= utente e ruoli (come RepairTracker.ashx) =================
-
 	private static Utente CaricaUtente(HttpContext ctx)
 	{
 		Utente u = new Utente();
@@ -166,8 +147,6 @@ public class SafetyHandler : IHttpHandler
 		return u;
 	}
 
-	// ================= lettura =================
-
 	private static string Perimetro(string p)
 	{
 		string v = (p ?? "").Trim().ToUpperInvariant();
@@ -177,7 +156,6 @@ public class SafetyHandler : IHttpHandler
 
 	private static void Dati(HttpContext ctx, SqlConnection cn, Utente u, string perimetro)
 	{
-		// valori[parametro][anno][location] = [12 valori o null]
 		Dictionary<string, object> valori = new Dictionary<string, object>();
 		using (SqlCommand cmd = new SqlCommand(
 			"SELECT Parametro, Anno, Location, Mese, Valore FROM dbo.SafetyValori WHERE Perimetro = @p", cn))
@@ -279,8 +257,6 @@ public class SafetyHandler : IHttpHandler
 		Reply(ctx, d);
 	}
 
-	// ================= caricamento del file =================
-
 	private static void Carica(HttpContext ctx, SqlConnection cn, Utente u, Dictionary<string, object> body)
 	{
 		string nomeFile = Str(body, "file");
@@ -296,7 +272,6 @@ public class SafetyHandler : IHttpHandler
 		t.Columns.Add("Mese", typeof(byte));
 		t.Columns.Add("Valore", typeof(decimal));
 
-		// blocchi da sostituire: perimetro|parametro|anno
 		List<string[]> blocchi = new List<string[]>();
 		List<string> nomiPerimetri = new List<string>();
 		List<string> anni = new List<string>();
@@ -395,8 +370,6 @@ public class SafetyHandler : IHttpHandler
 		Reply(ctx, d);
 	}
 
-	// ================= controllo =================
-
 	private static void Health(HttpContext ctx)
 	{
 		Dictionary<string, object> d = new Dictionary<string, object>();
@@ -433,8 +406,6 @@ public class SafetyHandler : IHttpHandler
 		}
 		Reply(ctx, d);
 	}
-
-	// ================= richiesta e risposta =================
 
 	private static SqlConnection Open(string name)
 	{

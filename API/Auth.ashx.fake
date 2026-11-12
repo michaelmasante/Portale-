@@ -1,39 +1,5 @@
 ﻿<%@ WebHandler Language="C#" Class="AuthHandler" %>
 
-/*
- * Accesso al Portale: login, registrazione, uscita. Gli utenti e il registro degli accessi
- * stanno nel database SQL Express "PortaleLogin" (script: Login_01_database.sql).
- *
- * Azioni (la pagina Login.html e l'header le chiamano da sole):
- *   GET  ?action=me         chi e' collegato in questo momento (risponde anche a chi non ha fatto il login)
- *   GET  ?health=1          prova di connessione al database (da aprire nel browser, dal server)
- *   POST ?action=login      nome utente + password -> cookie di accesso
- *   POST ?action=register   crea un utente (resta "in attesa" finche' non lo si attiva, vedi sotto)
- *   POST ?action=logout     esce
- *
- * Le password non vengono mai salvate: si salva solo l'impronta PBKDF2-SHA256 con un "sale" casuale
- * per ogni utente. Dopo 5 password sbagliate l'account si blocca per 15 minuti.
- * Tutti i login, gli errori, i blocchi, le uscite e le registrazioni finiscono in AccessiLog.
- *
- * Le richieste che cambiano qualcosa devono essere POST, in JSON, con l'intestazione X-Portale: un altro
- * sito web non puo' mandarle dal browser di un utente.
- *
- * Impostazioni nel Web.config (radice del Portale):
- *
- *   <connectionStrings>
- *     <add name="PortaleLogin" providerName="System.Data.SqlClient"
- *          connectionString="Data Source=.\SQLEXPRESS;Initial Catalog=PortaleLogin;Integrated Security=True" />
- *   </connectionStrings>
- *
- *   <appSettings>
- *     <!-- true = chi si registra puo' entrare subito; false (o voce assente) = deve prima essere attivato -->
- *     <add key="RegistrazioneAutomatica" value="false" />
- *   </appSettings>
- *
- * Codice scritto in C# 5 (senza interpolazione di stringhe, "?." ecc.) e con le lettere accentate scritte
- * come \u00E8, \u00F9 ...: cosi' funziona qualunque sia la codifica con cui il file viene salvato o copiato.
- */
-
 using System;
 using System.Collections.Generic;
 using System.Configuration;
@@ -53,9 +19,9 @@ public class AuthHandler : IHttpHandler
 	private const int HashIterations = 100000;
 	private const int HashBytes = 32;
 	private const int SaltBytes = 16;
-	private const int MaxFailedAttempts = 5;        // password sbagliate prima del blocco
-	private const int LockMinutes = 15;             // durata del blocco
-	private const int MaxPendingRegistrations = 100; // richieste in attesa oltre le quali non se ne accettano altre
+	private const int MaxFailedAttempts = 5;
+	private const int LockMinutes = 15;
+	private const int MaxPendingRegistrations = 100;
 	private const int MinPasswordLength = 8;
 	private const int MaxPasswordLength = 128;
 	private const int MaxBodyChars = 16384;
@@ -68,7 +34,6 @@ public class AuthHandler : IHttpHandler
 	private static readonly Regex EmailRx = new Regex(@"^[^@\s]+@[^@\s]+\.[^@\s]+$");
 	private static readonly Regex LocalPageRx = new Regex(@"^[A-Za-z0-9_.-]+\.html(\?[^\s]*)?$");
 
-	// errori da mostrare all'utente cosi' come sono scritti
 	private class UserException : Exception
 	{
 		public UserException(string message) : base(message) { }
@@ -95,7 +60,6 @@ public class AuthHandler : IHttpHandler
 			if (req.QueryString["health"] == "1") { Health(context); return; }
 			if (action == "me") { Me(context); return; }
 
-			// le azioni che cambiano qualcosa: solo POST con l'intestazione X-Portale
 			if (req.HttpMethod != "POST" || req.Headers["X-Portale"] != "1") throw new UserException(BadRequest);
 
 			if (action == "login") Login(context);
@@ -105,7 +69,6 @@ public class AuthHandler : IHttpHandler
 		}
 		catch (UserException ex)
 		{
-			// errore previsto (password sbagliata, campo mancante...): risposta normale con ok = false
 			Dictionary<string, object> d = new Dictionary<string, object>();
 			d["ok"] = false;
 			d["message"] = ex.Message;
@@ -113,7 +76,6 @@ public class AuthHandler : IHttpHandler
 		}
 		catch (Exception ex)
 		{
-			// errore vero (database non raggiungibile, Web.config incompleto...): il dettaglio solo se si e' sul server
 			res.StatusCode = 500;
 			res.TrySkipIisCustomErrors = true;
 			Dictionary<string, object> d = new Dictionary<string, object>();
@@ -123,8 +85,6 @@ public class AuthHandler : IHttpHandler
 			Reply(context, d);
 		}
 	}
-
-	// ================= azioni =================
 
 	private static void Login(HttpContext ctx)
 	{
@@ -177,7 +137,6 @@ public class AuthHandler : IHttpHandler
 
 			if (!found)
 			{
-				// stesso tempo di risposta anche se l'utente non esiste (non si capisce quali nomi esistono)
 				Hash(password, DummySalt, HashIterations);
 				WriteLog(cn, null, username, "LoginFallito", ip, "Utente inesistente", true);
 				throw new UserException(BadLogin);
@@ -185,13 +144,11 @@ public class AuthHandler : IHttpHandler
 
 			if (lockedMinutes > 0)
 			{
-				// account bloccato: la password non viene nemmeno controllata
 				throw new UserException("Troppi tentativi sbagliati. Riprova tra " + lockedMinutes + (lockedMinutes == 1 ? " minuto." : " minuti."));
 			}
 
 			if (!SameBytes(Hash(password, salt, iterations), hash))
 			{
-				// conta l'errore; al quinto l'account si blocca per 15 minuti
 				using (SqlCommand cmd = new SqlCommand(
 					"UPDATE dbo.Utenti SET " +
 					"BloccatoFinoA = CASE WHEN TentativiFalliti + 1 >= @max THEN DATEADD(MINUTE, @min, SYSDATETIME()) ELSE BloccatoFinoA END, " +
@@ -215,7 +172,6 @@ public class AuthHandler : IHttpHandler
 				throw new UserException("Il tuo account non \u00E8 ancora stato attivato. Chiedi all'amministratore di attivarlo.");
 			}
 
-			// accesso riuscito
 			using (SqlCommand cmd = new SqlCommand(
 				"UPDATE dbo.Utenti SET TentativiFalliti = 0, BloccatoFinoA = NULL, UltimoAccesso = SYSDATETIME() WHERE Id = @id", cn))
 			{
@@ -290,7 +246,6 @@ public class AuthHandler : IHttpHandler
 			}
 			catch (SqlException ex)
 			{
-				// 2627 / 2601 = esiste gia' un utente con questo nome
 				if (ex.Number == 2627 || ex.Number == 2601) throw new UserException("Questo nome utente \u00E8 gi\u00E0 in uso.");
 				throw;
 			}
@@ -323,7 +278,6 @@ public class AuthHandler : IHttpHandler
 			}
 			catch (Exception)
 			{
-				// il registro non deve impedire l'uscita
 			}
 		}
 
@@ -338,7 +292,6 @@ public class AuthHandler : IHttpHandler
 		FormsIdentity id = ctx.User == null ? null : ctx.User.Identity as FormsIdentity;
 		if (id != null && id.IsAuthenticated)
 		{
-			// ruoli letti ogni volta dal database: un ruolo dato o tolto vale dalla pagina successiva
 			List<string> ruoli = new List<string>();
 			bool exists = false, active = false;
 			try
@@ -364,7 +317,6 @@ public class AuthHandler : IHttpHandler
 			}
 			catch (Exception)
 			{
-				// database non raggiungibile: l'utente resta dentro, ma senza ruoli
 				exists = true;
 				active = true;
 				d["avviso"] = "Ruoli non disponibili: database non raggiungibile.";
@@ -372,7 +324,6 @@ public class AuthHandler : IHttpHandler
 
 			if (!exists || !active)
 			{
-				// utente eliminato o disattivato: esce subito, senza aspettare la fine della sessione
 				FormsAuthentication.SignOut();
 				d["authenticated"] = false;
 			}
@@ -391,7 +342,6 @@ public class AuthHandler : IHttpHandler
 		Reply(ctx, d);
 	}
 
-	// Prova di connessione: dal server mostra il dettaglio, da un altro computer solo "ok" / "errore"
 	private static void Health(HttpContext ctx)
 	{
 		bool local = ctx.Request.IsLocal;
@@ -437,10 +387,6 @@ public class AuthHandler : IHttpHandler
 		Reply(ctx, d);
 	}
 
-	// ================= cookie di accesso =================
-
-	// Cookie di accesso di ASP.NET (autenticazione Forms): cifrato e firmato, HttpOnly, senza scadenza
-	// (finisce quando si chiude il browser). Il nome visibile nell'header viaggia dentro il cookie.
 	private static void SignIn(HttpContext ctx, string username, string fullName)
 	{
 		DateTime now = DateTime.Now;
@@ -453,7 +399,6 @@ public class AuthHandler : IHttpHandler
 		ctx.Response.Cookies.Add(cookie);
 	}
 
-	// Dopo il login si va dove si voleva andare, ma solo dentro questo sito: mai su indirizzi di altri siti.
 	private static string SafeReturnUrl(string url)
 	{
 		const string home = "Portale.html";
@@ -475,8 +420,6 @@ public class AuthHandler : IHttpHandler
 		return url;
 	}
 
-	// ================= password =================
-
 	private static byte[] Hash(string password, byte[] salt, int iterations)
 	{
 		Rfc2898DeriveBytes kdf = new Rfc2898DeriveBytes(password, salt, iterations, HashAlgorithmName.SHA256);
@@ -493,7 +436,6 @@ public class AuthHandler : IHttpHandler
 		return bytes;
 	}
 
-	// confronto che dura sempre lo stesso tempo, qualunque sia il punto in cui i due valori differiscono
 	private static bool SameBytes(byte[] a, byte[] b)
 	{
 		if (a == null || b == null || a.Length != b.Length) return false;
@@ -501,8 +443,6 @@ public class AuthHandler : IHttpHandler
 		for (int i = 0; i < a.Length; i++) diff |= a[i] ^ b[i];
 		return diff == 0;
 	}
-
-	// ================= database =================
 
 	private static SqlConnection Open()
 	{
@@ -522,9 +462,6 @@ public class AuthHandler : IHttpHandler
 		return cn;
 	}
 
-	// Registro degli accessi. Un errore qui non deve mai impedire un accesso.
-	// throttle = true (nomi utente inesistenti): oltre 100 righe in 10 minuti non si scrive piu',
-	// cosi' chi prova nomi a caso non puo' riempire il database.
 	private static void WriteLog(SqlConnection cn, int? userId, string username, string evento, string ip, string detail, bool throttle)
 	{
 		try
@@ -546,7 +483,6 @@ public class AuthHandler : IHttpHandler
 		}
 		catch (Exception)
 		{
-			// vedi sopra
 		}
 	}
 
@@ -555,8 +491,6 @@ public class AuthHandler : IHttpHandler
 		if (s == null) return DBNull.Value;
 		return s.Length > max ? s.Substring(0, max) : s;
 	}
-
-	// ================= richiesta e risposta =================
 
 	private static Dictionary<string, object> ReadJson(HttpContext ctx)
 	{

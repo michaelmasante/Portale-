@@ -4,8 +4,6 @@
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<title>TOOL CERTIFICATI</title>
-	<!-- Ruoli che possono aprire questa pagina (separati da virgola, es. "Certificati,Safety").
-	     Vuoto = tutti gli utenti collegati. Admin entra sempre. -->
 	<meta name="ruoli" content="Certificati,Admin">
 
 	<!-- Disattiva errore favicon -->
@@ -16,15 +14,10 @@
 	<!-- CSS Personalizzato Motori -->
 	<link rel="stylesheet" href="CSS/Motori/Motori.css">
 
-	<!-- CSS della scheda "Carica Excel" -->
 	<link rel="stylesheet" href="CSS/Motori/CaricaExcel.css?v=2">
-	<!-- Legenda dei TAG -->
 	<link rel="stylesheet" href="CSS/Motori/LegendaTag.css?v=1">
-	<!-- Scheda Tracker EPA -->
-	<link rel="stylesheet" href="CSS/Motori/TrackerEpa.css?v=1">
+	<link rel="stylesheet" href="CSS/Motori/TrackerEpa.css?v=2">
 
-	<!-- XLSX Library (SheetJS 0.18.5): la copia dentro il Portale usata da Safety (dalla rete aziendale cdnjs può essere bloccato).
-	     Serve solo alla scheda "Carica Excel": i dati della pagina arrivano dal database -->
 	<script src="JS/Safety/lib/xlsx-0.18.5.full.min.js"></script>
 
 	<!-- Tabulator JS LOCALE -->
@@ -38,7 +31,6 @@
 	<main class="container">
 		<h1>TOOL CERTIFICATI</h1>
 
-		<!-- Legenda dei TAG, in alto a destra: si apre e si chiude (il browser ricorda la scelta) -->
 		<details class="tag-legenda" id="tag-legenda">
 			<summary title="Significato dei TAG"><i class="tag-legenda-icona">i</i>Legenda TAG<span class="tag-legenda-freccia">&#9660;</span></summary>
 			<div class="tag-legenda-corpo">
@@ -102,7 +94,6 @@
 				</div>
 			</div>
 
-			<!-- Dropdown Multi-Select Ref. US Family (stesso comportamento del filtro Customer) -->
 			<div class="multiselect-container multiselect-container--compact" id="usfamily-multiselect">
 				<button type="button" class="multiselect-btn" id="usfamily-dropdown-btn">
 					<span id="usfamily-btn-text">Tutte le Ref. US Family</span>
@@ -121,7 +112,6 @@
 				</div>
 			</div>
 
-			<!-- Dropdown Multi-Select Ref. EU Family (stesso comportamento del filtro Customer) -->
 			<div class="multiselect-container multiselect-container--compact" id="eufamily-multiselect">
 				<button type="button" class="multiselect-btn" id="eufamily-dropdown-btn">
 					<span id="eufamily-btn-text">Tutte le Ref. EU Family</span>
@@ -141,19 +131,15 @@
 			</div>
 		</div>
 
-		<!-- Barra delle Schede: non più usata col nuovo modello dati
-			 (un'unica tabella con righe espandibili), lasciata vuota -->
 		<div id="tabs-container" class="tabs-container"></div>
 
 		<!-- Contenitore per la griglia Tabulator -->
 		<div id="grids-wrapper"></div>
 
-		<!-- ============ TRACKER EPA (la gestisce JS/Motori/TrackerEpa.js) ============ -->
 		<section class="epa-vista" id="epa-view" hidden>
 			<div id="epa-contenuto"></div>
 		</section>
 
-		<!-- ============ CARICA EXCEL (solo ruolo "Certificati Upload" o Admin; la gestisce JS/Motori/CaricaExcel.js) ============ -->
 		<section class="cx-vista" id="cx-carica" data-ruoli="Certificati Upload" hidden>
 			<div class="cx-card">
 				<div class="cx-card-head">Carica Excel</div>
@@ -188,10 +174,8 @@
 	<!-- Script caricatore Header -->
 	<script src="JS/Portal/header-loader.js?v=5"></script>
 	<!-- Script Gestione Tabella Certificati -->
-	<script src="JS/Motori/Motori.js?v=5"></script>
-	<!-- Scheda "Carica Excel" -->
+	<script src="JS/Motori/Motori.js?v=6"></script>
 	<script src="JS/Motori/CaricaExcel.js?v=3"></script>
-	<!-- Scheda "Tracker EPA" -->
-	<script src="JS/Motori/TrackerEpa.js?v=1"></script>
+	<script src="JS/Motori/TrackerEpa.js?v=3"></script>
 </body>
 </html>

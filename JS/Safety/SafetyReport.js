@@ -1,25 +1,11 @@
-/* ============ Safety - presentazione (anteprima nella pagina + export PowerPoint) ============
-   Ogni slide è descritta UNA volta come elenco di elementi in pollici (slide 13,333 x 7,5 = LAYOUT_WIDE):
-       testo, rettangolo, ellisse, linea, immagine, tabella
-   e da lì si disegna sia l'anteprima HTML (disegnaHtml) sia il file PowerPoint (esportaPpt, con pptxgenjs):
-   quello che si vede nella pagina è quello che finisce nel file.
-
-   I grafici sono disegnati con Chart.js in immagini a 200 punti per pollice: le dimensioni dei caratteri
-   qui sotto sono in punti tipografici "veri" della slide (PT).
-
-   Cose da cambiare a mano più facilmente:
-     AREE_MFG       linguette delle tabelle e righe della slide "IFI Scorecard"
-     SEQUENZA_PERF  ordine delle righe delle slide "Plant Performance"
-     MAX_TUTTE      sopra questo numero di location, i grafici per location mostrano solo quelle con casi (NMFG)
-   I target e la composizione dei gruppi sono nel database (dbo.SafetyTarget, dbo.SafetyGruppi). */
-
 (function (root) {
 	"use strict";
 
 	const C = root.SafetyCalcoli;
 	const DPI = 200;
-	const PT = DPI / 72;                 // pixel dell'immagine per un punto tipografico
-	const FONT = "Calibri, Carlito, 'Segoe UI', Arial, sans-serif";
+	const PT = DPI / 72;
+	const FONT = "'Arial Narrow', 'Liberation Sans Narrow', 'Arial Nova Cond', Arial, sans-serif";
+	const FONT_PPT = "Arial Narrow";
 	const MESI_UP = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
 	const MESI_HDR = ["JAN", "FEB", "MAR", "APR", "MAY", "JUNE", "JULY", "AUG", "SEPT", "OCT", "NOV", "DEC"];
 	const MESI_SC = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -44,14 +30,12 @@
 			boxTrend: "SCORECARD", file: "Safety_Monthly_Report_MFG"
 		},
 		NMFG: {
-			sigla: "NMFG", ivg: "IVG NMFG", colore: "#f97316", box: "f97316",
+			sigla: "NMFG", ivg: "IVG NMFG", colore: "#1e40af", box: "1e40af",
 			sottotitolo: "Perimeter Non-Manufacturing (NMFG)", etichettaPerimetro: "Perimeter Non-Manufacturing", sizePerimetro: 14,
 			note: "Permanent and Agency Employees\nNMFG perimeter: complete\nLTI WR > 1 day of absence\nExcluded in itinere injuries",
 			boxTrend: "IVG NMFG", file: "Safety_Monthly_Report_NMFG"
 		}
 	};
-
-	/* ================= formati ================= */
 
 	const f3 = v => v == null ? "" : C.r3(v).toFixed(3).replace(".", ",");
 	const fInt = v => v == null ? "" : String(Math.round(v));
@@ -62,8 +46,6 @@
 	}
 	const aa = anno => String(anno).slice(-2);
 
-	/* ================= elementi della slide ================= */
-
 	const T = (x, y, w, h, runs, o) => Object.assign({ t: "testo", x, y, w, h, runs: typeof runs === "string" ? [{ testo: runs }] : runs }, o || {});
 	const R = (x, y, w, h, fill, line, lineW, forma) => ({ t: forma || "rett", x, y, w, h, fill, line, lineW: lineW || 0 });
 	const L = (x, y, w, colore, pt) => ({ t: "linea", x, y, w, colore, pt });
@@ -71,9 +53,6 @@
 	const TB = (x, y, colW, rowH, righe, bordo) => ({ t: "tabella", x, y, colW, rowH, righe, bordo: bordo || { pt: 0.75, colore: "000000" } });
 	const cella = (testo, o) => Object.assign({ testo: testo == null ? "" : String(testo) }, o || {});
 
-	/* ================= grafici (Chart.js -> immagine) ================= */
-
-	// Etichette dei valori disegnate a mano: posizione sopra / sotto / al centro, testo verticale, nessuna sovrapposizione col bordo
 	const pluginEtichette = {
 		id: "sfEtichette",
 		afterDatasetsDraw(chart) {
@@ -114,7 +93,6 @@
 		}
 	};
 
-	// Linea dell'asse orizzontale in basso (grafici a barre)
 	const pluginAsse = {
 		id: "sfAsse",
 		afterDraw(chart, args, opts) {
@@ -149,11 +127,20 @@
 		return { grid: { display: false, drawBorder: false }, border: { display: false }, ticks: { autoSkip: false, maxRotation: rot || 0, minRotation: rot || 0, color: colore || "#475569", font: { size: Math.round(size * PT), family: FONT } } };
 	}
 
+	function altezzaFissa(asse, pollici) {
+		if (pollici) asse.afterFit = scala => { scala.height = pollici * DPI; };
+		return asse;
+	}
+
+	function etichetta(nome, max) {
+		const s = String(nome);
+		return s.length > max ? s.slice(0, max - 1).trim() + "…" : s;
+	}
+
 	function asseY(min, max, griglia) {
 		return { display: !!griglia, min, max, beginAtZero: min == null, grid: { color: "#e2e8f0", lineWidth: Math.max(1, 0.5 * PT), drawBorder: false }, border: { display: false }, ticks: { display: false } };
 	}
 
-	/* Etichette dell'asse X: nomi lunghi su più righe */
 	function aCapo(nome, max) {
 		const parole = String(nome).split(" ");
 		const righe = [];
@@ -166,7 +153,6 @@
 		return righe.length > 1 ? righe : righe[0];
 	}
 
-	/* Grafico a linee IFI/ISI: punto anno precedente, linea anno corrente, retta tratteggiata fino al target */
 	function graficoLinea(w, h, o) {
 		const labels = [String(o.anno - 1)].concat(MESI_UP, [["TGT", String(o.anno)]]);
 		const n = labels.length;
@@ -205,7 +191,6 @@
 		});
 	}
 
-	/* Barre anno corrente vs anno precedente (LTI 26 vs 25 / IFI 26 vs 25) */
 	function graficoConfronto(w, h, o) {
 		const tutti = o.cur.concat(o.prev).filter(v => v != null);
 		const max = Math.max.apply(null, tutti.concat([0])) || 1;
@@ -231,31 +216,30 @@
 		});
 	}
 
-	/* Barre per location (una serie) */
 	function graficoLocation(w, h, o) {
 		const vals = o.valori;
 		const max = Math.max.apply(null, vals.filter(v => v != null).concat([0])) || 1;
 		const pochi = o.labels.length <= 14;
+		const tanti = o.labels.length > 40;
 		return disegna(w, h, {
 			type: "bar",
 			data: {
-				labels: o.labels.map(l => aCapo(l, pochi ? 18 : 26)),
+				labels: o.labels.map(l => tanti ? etichetta(l, 34) : aCapo(l, pochi ? 18 : 26)),
 				datasets: [{ data: vals, backgroundColor: "#0911fa", borderWidth: 0, categoryPercentage: 0.75, barPercentage: 0.8, maxBarThickness: 0.42 * DPI,
-					sfEtichette: { size: o.sizeVal, offset: 2, testo: v => (v == null || v === 0) ? "" : o.formato(v) } }]
+					sfEtichette: { size: o.sizeVal, offset: 2, verticale: !!o.verticale, testo: v => (v == null || v === 0) ? "" : o.formato(v) } }]
 			},
 			options: {
 				layout: { padding: { top: 0.08 * DPI, right: 0.1 * DPI, bottom: 0.02 * DPI, left: 0.1 * DPI } },
 				plugins: { sfAsse: { mostra: true } },
-				scales: { x: asseX(o.sizeAsse, pochi ? 0 : 45, "#1e293b"), y: asseY(0, max * 1.2, false) }
+				scales: { x: asseX(tanti ? 6.5 : o.sizeAsse, pochi ? 0 : 45, "#1e293b"), y: asseY(0, max * (o.verticale ? 1.4 : 1.2), false) }
 			}
 		});
 	}
 
-	/* Barre impilate per mese (LTI Cases Monthly Comparison) */
 	function graficoMensile(w, h, o) {
 		const tot = o.labels.map((_, i) => o.serie.reduce((a, s) => a + (s.data[i] || 0), 0));
-		const max = Math.max.apply(null, tot.concat([0])) || 1;
-		const pochi = o.labels.length <= 14;
+		const max = o.yMax || (Math.max.apply(null, tot.concat([0])) || 1) * 1.12;
+		const pochi = o.pochi != null ? o.pochi : o.labels.length <= 14;
 		return disegna(w, h, {
 			type: "bar",
 			data: {
@@ -266,12 +250,11 @@
 			options: {
 				layout: { padding: { top: 0.08 * DPI, right: 0.1 * DPI, bottom: 0.02 * DPI, left: 0.1 * DPI } },
 				plugins: { sfAsse: { mostra: true } },
-				scales: { x: Object.assign(asseX(o.sizeAsse, pochi ? 0 : 45, "#1e293b"), { stacked: true }), y: Object.assign(asseY(0, max * 1.12, false), { stacked: true }) }
+				scales: { x: altezzaFissa(Object.assign(asseX(o.sizeAsse, pochi ? 0 : 45, "#1e293b"), { stacked: true }), o.altezzaAsse), y: Object.assign(asseY(0, max, false), { stacked: true }) }
 			}
 		});
 	}
 
-	/* IFI Monthly Trend: barre + retta tratteggiata dal 2025 al target */
 	function graficoTrend(w, h, o) {
 		const n = o.labels.length;
 		const vals = o.valori.map(v => v == null ? null : C.r3(v));
@@ -294,8 +277,6 @@
 			}
 		});
 	}
-
-	/* ================= contesto e calcoli comuni ================= */
 
 	function contesto(dati, perimetro, anno, mese) {
 		const cfg = PERIMETRI[perimetro];
@@ -353,8 +334,6 @@
 		els.push(R(x, y, w, h, null, colore, 0.75));
 		els.push(T(x + 0.04, y + 0.03, 2, 0.3, [{ testo: titoloBox, size: 16, bold: true, color: SCURO }], { valign: "top" }));
 	}
-
-	/* ================= slide ================= */
 
 	function slideCopertina(img, testi) {
 		const els = [];
@@ -418,7 +397,6 @@
 			ytd.push(i <= m ? C.ytd(k.dati, "ISI", all, a, i).valore : null);
 			r12.push(i <= m ? C.r12(k.dati, "ISI", all, a, i).valore : null);
 		}
-		// scala "stretta": l'asse parte vicino al valore più basso, così si vedono i cambi di pendenza mese per mese
 		const opt = { anno: a, prev: prevFy, target: tgt, colore: "#b91c1c", sizeVal: 8, sizeAsse: 8, scalaStretta: true, pointStyle: "rect" };
 		boxGrafico(els, 0.437, 1.55, 8.9, 2.35, "ISI YTD", "b91c1c");
 		els.push(I(0.437, 1.55 + 0.32, 8.9, 2.35 - 0.34, graficoLinea(8.9, 2.35 - 0.34, Object.assign({ valori: ytd }, opt))));
@@ -509,7 +487,6 @@
 		return { titolo: "IFI Scorecard", els };
 	}
 
-	/* dati per location (YTD) usati dalle slide "IFI and LTI Cases" e "LTI Cases Monthly Comparison" */
 	function perLocation(k) {
 		return k.locs.map(nome => {
 			const ytd = C.ytd(k.dati, "IFI", [nome], k.anno, k.mese);
@@ -521,33 +498,27 @@
 
 	const perNome = (a, b) => a.nome.localeCompare(b.nome, "en", { sensitivity: "base" });
 
-	function notaNascoste(els, x, y, w, nascoste) {
-		if (nascoste > 0) els.push(T(x, y, w, 0.22, [{ testo: `Not shown: ${nascoste} locations with no LTI YTD (IFI 0,000).`, size: 9, italic: true, color: "64748b" }], { align: "right", valign: "top" }));
-	}
-
 	function slideCasi(k, img, n) {
 		const els = [];
 		const pl = perLocation(k);
-		const tutte = pl.length <= MAX_TUTTE;
-		const visibili = tutte ? pl : pl.filter(p => p.lti > 0);
+		const visibili = pl;
 		const perLti = visibili.slice().sort((a, b) => (b.lti - a.lti) || perNome(a, b));
 		const perIfi = visibili.slice().sort((a, b) => ((b.ifi || 0) - (a.ifi || 0)) || perNome(a, b));
 		const tit = k.perimetro === "MFG" ? `${k.cfg.ivg} – IFI and LTI Cases` : "IFI and LTI Cases";
 		els.push(titolo(tit, `Results YTD ${numMese(k)}`, 0.4, 0.25, 8, 0.85));
 		const molte = visibili.length > 12;
 		const gLti = { labels: perLti.map(p => p.nome), valori: perLti.map(p => p.lti), formato: fInt, sizeVal: 11, sizeAsse: molte ? 9 : 10 };
-		const gIfi = { labels: perIfi.map(p => p.nome), valori: perIfi.map(p => C.r3(p.ifi)), formato: f3, sizeVal: molte ? 8 : 11, sizeAsse: molte ? 9 : 10 };
+		const gIfi = { labels: perIfi.map(p => p.nome), valori: perIfi.map(p => C.r3(p.ifi)), formato: f3, sizeVal: molte ? 8 : 11, sizeAsse: molte ? 9 : 10, verticale: visibili.length > 40 };
 		if (k.perimetro === "MFG") {
 			els.push(T(0.4, 1.35, 6.2, 0.35, [{ testo: "LTI", size: 18, bold: true, color: SCURO }], { align: "center" }));
 			els.push(T(6.8, 1.35, 6.0, 0.35, [{ testo: "IFI", size: 18, bold: true, color: SCURO }], { align: "center" }));
 			els.push(I(0.4, 1.75, 6.2, 4.55, graficoLocation(6.2, 4.55, gLti)));
 			els.push(I(6.8, 1.75, 6.0, 4.55, graficoLocation(6.0, 4.55, gIfi)));
 		} else {
-			els.push(T(0.4, 1.1, 12.4, 0.35, [{ testo: "IFI", size: 18, bold: true, color: SCURO }], { align: "center" }));
-			els.push(I(0.4, 1.45, 12.4, 2.45, graficoLocation(12.4, 2.45, gIfi)));
-			els.push(T(0.4, 3.95, 12.4, 0.35, [{ testo: "LTI", size: 18, bold: true, color: SCURO }], { align: "center" }));
-			els.push(I(0.4, 4.3, 12.4, 2.2, graficoLocation(12.4, 2.2, gLti)));
-			notaNascoste(els, 6.4, 6.48, 6.4, pl.length - visibili.length);
+			els.push(T(0.4, 0.95, 12.4, 0.32, [{ testo: "IFI", size: 16, bold: true, color: SCURO }], { align: "center" }));
+			els.push(I(0.4, 1.25, 12.4, 2.6, graficoLocation(12.4, 2.6, gIfi)));
+			els.push(T(0.4, 3.85, 12.4, 0.32, [{ testo: "LTI", size: 16, bold: true, color: SCURO }], { align: "center" }));
+			els.push(I(0.4, 4.15, 12.4, 2.5, graficoLocation(12.4, 2.5, gLti)));
 		}
 		footer(els, img, n);
 		return { titolo: "IFI and LTI Cases", els };
@@ -562,18 +533,21 @@
 		els.push(T(0.4, 1.1, 8.5, 0.35, [{ testo: "LTI", size: 18, bold: true, color: SCURO }], { align: "center" }));
 		const serie = [];
 		for (let i = 0; i <= k.mese; i++) serie.push({ nome: MESI_UP[i], colore: COLORI_MESI[i], data: visibili.map(p => p.mesi[i]) });
-		els.push(I(0.4, 1.5, 8.5, 3.85, graficoMensile(8.5, 3.85, { labels: visibili.map(p => p.nome), serie, sizeVal: 9, sizeAsse: 9 })));
+		const pochi = visibili.length <= 14;
+		const yMax = Math.max.apply(null, visibili.map(p => p.lti).concat([1])) * 1.12;
+		const altezzaAsse = pochi ? 0.55 : 1.0;
+		els.push(I(0.4, 1.5, 8.5, 3.85, graficoMensile(8.5, 3.85, { labels: visibili.map(p => p.nome), serie, sizeVal: 9, sizeAsse: 9, yMax, altezzaAsse })));
 		serie.forEach((s, i) => {
 			els.push(R(0.4 + i * 0.75, 5.5, 0.18, 0.18, s.colore.replace("#", "")));
 			els.push(T(0.6 + i * 0.75, 5.47, 0.55, 0.24, [{ testo: s.nome, size: 10, bold: true, color: SCURO }], { valign: "middle", margine: 0 }));
 		});
-		if (!tutte) notaNascoste(els, 0.4, 5.85, 8.5, pl.length - visibili.length);
 
 		const ultimo = pl.filter(p => p.mesi[k.mese] > 0).sort((a, b) => (b.mesi[k.mese] - a.mesi[k.mese]) || perNome(a, b));
 		els.push(T(9.2, 1.1, 3.6, 0.4, [{ testo: `${MESI_FULL[k.mese]} ${k.anno}`, size: 16, bold: true, color: SCURO }], { align: "center" }));
 		if (ultimo.length) {
-			els.push(I(9.2, 1.55, 3.6, 3.8, graficoMensile(3.6, 3.8, {
-				labels: ultimo.map(p => p.nome), serie: [{ nome: MESI_UP[k.mese], colore: COLORI_MESI[k.mese], data: ultimo.map(p => p.mesi[k.mese]) }], sizeVal: 16, sizeAsse: 9
+			els.push(I(9.2, 1.5, 3.6, 3.85, graficoMensile(3.6, 3.85, {
+				labels: ultimo.map(p => p.nome), serie: [{ nome: MESI_UP[k.mese], colore: COLORI_MESI[k.mese], data: ultimo.map(p => p.mesi[k.mese]) }], sizeVal: 9, sizeAsse: 9,
+				yMax, altezzaAsse, pochi: true
 			})));
 		} else {
 			els.push(T(9.2, 3, 3.6, 0.4, [{ testo: "No LTI in the month", size: 12, italic: true, color: "64748b" }], { align: "center" }));
@@ -583,7 +557,6 @@
 		return { titolo: "LTI Cases Monthly Comparison", els };
 	}
 
-	/* righe Plant/BU: stabilimenti di ogni gruppo, poi il subtotale del gruppo; in fondo il totale MFG */
 	function righePerf(k) {
 		const righe = [];
 		const messi = new Set();
@@ -624,11 +597,8 @@
 		return { titolo: `${tipo} Plant Performance`, els };
 	}
 
-	/* ================= costruzione della presentazione ================= */
-
 	function attesa() { return new Promise(r => setTimeout(r, 0)); }
 
-	/* Restituisce { slides, avvisi }. avanzamento(i, totale) viene chiamata dopo ogni slide. */
 	async function costruisci(dati, perimetro, anno, mese, testi, img, avanzamento) {
 		const k = contesto(dati, perimetro, anno, mese);
 		const fasi = perimetro === "MFG"
@@ -646,8 +616,6 @@
 		if (!C.location(dati, anno - 1).length) avvisi.push(`Non ci sono dati del ${anno - 1}: 12MR e confronti con l'anno prima sono incompleti.`);
 		return { slides, avvisi };
 	}
-
-	/* ================= anteprima HTML ================= */
 
 	function esc(s) {
 		return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -714,8 +682,6 @@
 		});
 	}
 
-	/* ================= PowerPoint ================= */
-
 	async function esportaPpt(slides, nomeFile) {
 		const pptx = new root.PptxGenJS();
 		pptx.layout = "LAYOUT_WIDE";
@@ -734,11 +700,11 @@
 					sl.addImage({ data: e.data, x: e.x, y: e.y, w: e.w, h: e.h });
 				} else if (e.t === "testo") {
 					const runs = e.runs.map(r => ({ text: r.testo, options: Object.assign({ fontSize: r.size || 12, bold: !!r.bold, italic: !!r.italic, color: r.color || "000000", breakLine: !!r.br }, e.bullet ? { bullet: true } : {}) }));
-					sl.addText(runs, Object.assign({ x: e.x, y: e.y, w: e.w, h: e.h, fontFace: "Calibri", valign: e.valign || "top", align: e.align || "left" }, e.margine === 0 ? { margin: 0 } : {}));
+					sl.addText(runs, Object.assign({ x: e.x, y: e.y, w: e.w, h: e.h, fontFace: FONT_PPT, valign: e.valign || "top", align: e.align || "left" }, e.margine === 0 ? { margin: 0 } : {}));
 				} else if (e.t === "tabella") {
 					const rows = e.righe.map(riga => riga.map(c => ({
 						text: c.testo,
-						options: Object.assign({ fontFace: "Calibri", fontSize: c.size || 10, bold: !!c.bold, color: c.color || "000000", fill: { color: c.fill || "FFFFFF" }, align: c.align || "left", valign: "middle" },
+						options: Object.assign({ fontFace: FONT_PPT, fontSize: c.size || 10, bold: !!c.bold, color: c.color || "000000", fill: { color: c.fill || "FFFFFF" }, align: c.align || "left", valign: "middle" },
 							c.colspan ? { colspan: c.colspan } : {}, c.rowspan ? { rowspan: c.rowspan } : {})
 					})));
 					sl.addTable(rows, { x: e.x, y: e.y, w: e.colW.reduce((a, b) => a + b, 0), colW: e.colW, rowH: e.rowH, border: { type: "solid", pt: e.bordo.pt, color: e.bordo.colore }, margin: 0.02 });
@@ -747,8 +713,6 @@
 		});
 		await pptx.writeFile({ fileName: nomeFile });
 	}
-
-	/* ================= immagini (copertina e loghi del piè di pagina) ================= */
 
 	function leggiImmagine(url) {
 		return fetch(url, { credentials: "same-origin" })

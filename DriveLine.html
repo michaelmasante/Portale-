@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>DriveLine · test collegamento</title>
+	<!-- Stessi ruoli in API/DriveLine.ashx -->
+	<meta name="ruoli" content="DriveLine">
+
+	<link rel="icon" href="data:,">
+	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css">
+	<link rel="stylesheet" href="CSS/DriveLine/DriveLine.css?v=1">
+	<script>try { if (localStorage.getItem("dl_tema") === "chiaro") document.documentElement.setAttribute("data-tema", "chiaro"); } catch (e) {}</script>
+</head>
+<body>
+
+	<div id="header-placeholder"></div>
+
+	<main class="dl-page">
+
+		<div class="dl-head">
+			<div>
+				<h1><i class="bi bi-diagram-3"></i>DriveLine · test collegamento</h1>
+				<p class="dl-sub">Prova se dal server del Portale si arriva al database DriveLine e se le query di Access restituiscono dati. Sul database sorgente si fanno solo letture.</p>
+			</div>
+			<button type="button" class="dl-btn dl-btn-outline dl-btn-sm" id="dl-tema"></button>
+		</div>
+
+		<nav class="dl-salti" aria-label="Sezioni">
+			<a href="#sez-conn"><span>1</span>Collegamento</a>
+			<a href="#sez-query"><span>2</span>Query</a>
+			<a href="#sez-test"><span>3</span>DB di test</a>
+			<a href="#sez-dlt"><span>4</span>File DLT.TXT</a>
+		</nav>
+
+		<section class="dl-card" id="sez-conn">
+			<header class="dl-card-head">
+				<h2><span class="dl-num">1</span>Database sorgente</h2>
+				<span class="dl-badge" id="dl-conn-stato">non provato</span>
+			</header>
+
+			<div class="dl-form">
+				<label class="dl-campo">
+					<span>Tipo di database</span>
+					<select id="c-tipo">
+						<option value="sqlserver">SQL Server</option>
+						<option value="oracle">Oracle (driver .NET ODP.NET)</option>
+						<option value="odbc">ODBC (Oracle, DB2/AS400, altri)</option>
+						<option value="oledb">OLE DB</option>
+						<option value="webconfig">Stringa «DriveLineSorgente» del Web.config</option>
+					</select>
+				</label>
+				<label class="dl-campo">
+					<span>Dialetto SQL <i class="bi bi-info-circle" title="Decide come si scrivono le date nelle query ({INIZIO_ANNO}...) e la domanda «chi sono»."></i></span>
+					<select id="c-dialetto">
+						<option value="sqlserver">SQL Server</option>
+						<option value="oracle">Oracle</option>
+						<option value="db2">DB2 / AS400</option>
+						<option value="odbc">Generico ODBC</option>
+					</select>
+				</label>
+				<label class="dl-campo dl-campo-2">
+					<span>Server (nome o IP)</span>
+					<input type="text" id="c-server" placeholder="es. 10.1.2.3 oppure dwh.azienda.local" autocomplete="off" spellcheck="false">
+				</label>
+				<label class="dl-campo dl-solo" data-tipi="sqlserver">
+					<span>Istanza</span>
+					<input type="text" id="c-istanza" placeholder="vuota = predefinita" autocomplete="off" spellcheck="false">
+				</label>
+				<label class="dl-campo">
+					<span>Porta</span>
+					<input type="text" id="c-porta" inputmode="numeric" placeholder="1433" autocomplete="off">
+				</label>
+				<label class="dl-campo dl-campo-2">
+					<span id="c-database-etichetta">Database</span>
+					<input type="text" id="c-database" placeholder="vuoto = predefinito dell'utente" autocomplete="off" spellcheck="false">
+				</label>
+				<label class="dl-campo">
+					<span>Utente</span>
+					<input type="text" id="c-utente" autocomplete="off" spellcheck="false">
+				</label>
+				<label class="dl-campo">
+					<span>Password <i class="bi bi-info-circle" title="Non viene salvata: né nel browser né sul server."></i></span>
+					<span class="dl-pwd">
+						<input type="password" id="c-password" autocomplete="new-password">
+						<button type="button" class="dl-pwd-occhio" id="c-password-vedi" title="Mostra / nascondi"><i class="bi bi-eye"></i></button>
+					</span>
+				</label>
+
+				<div class="dl-spunte dl-solo" data-tipi="sqlserver">
+					<label><input type="checkbox" id="c-windows"> Autenticazione Windows (utente del pool IIS)</label>
+					<label><input type="checkbox" id="c-encrypt"> Cifra il collegamento</label>
+					<label><input type="checkbox" id="c-trust" checked> Fidati del certificato del server</label>
+				</div>
+
+				<div class="dl-campo dl-campo-tutta dl-solo" data-tipi="oracle,odbc,oledb">
+					<span class="dl-riga-etichetta">
+						<span>Stringa di connessione</span>
+						<select id="c-modello" class="dl-select-sm"><option value="">Modelli…</option></select>
+					</span>
+					<textarea id="c-stringa" rows="2" spellcheck="false" placeholder="Driver={...};..."></textarea>
+					<small class="dl-nota">Segnaposto: <code>{SERVER}</code> <code>{PORTA}</code> <code>{ISTANZA}</code> <code>{DATABASE}</code> <code>{UTENTE}</code> <code>{PASSWORD}</code> <code>{TIMEOUT}</code> prendono i valori dai campi sopra. Se in Access la tabella è collegata via ODBC, la sua stringa si vede in Gestione tabelle collegate.</small>
+				</div>
+
+				<p class="dl-nota dl-campo-tutta dl-solo" data-tipi="webconfig">Si usa la stringa <code>DriveLineSorgente</code> del Web.config (con il suo providerName). Server e porta qui sopra servono solo per la prova di rete.</p>
+
+				<label class="dl-campo">
+					<span>Timeout collegamento (s)</span>
+					<input type="text" id="c-timeout-conn" inputmode="numeric" value="15">
+				</label>
+				<label class="dl-campo">
+					<span>Timeout query (s)</span>
+					<input type="text" id="c-timeout-query" inputmode="numeric" value="120">
+				</label>
+			</div>
+
+			<details class="dl-dettagli" id="dl-tabelle">
+				<summary>Tabelle da controllare (nomi sul database sorgente)</summary>
+				<div class="dl-form dl-form-3">
+					<label class="dl-campo"><span>Tabella GAN (<code>{FI_GAN_L4}</code>)</span><input type="text" id="t-gan" value="FI_GAN_L4" spellcheck="false"></label>
+					<label class="dl-campo"><span>Tabella DLT (<code>{N09J0121_DLT}</code>)</span><input type="text" id="t-dlt" value="N09J0121_DLT" spellcheck="false"></label>
+					<label class="dl-campo"><span>CDA-COSTRUTTORI, se è anche lì</span><input type="text" id="t-cda" value="" placeholder="vuoto = non controllare" spellcheck="false"></label>
+				</div>
+				<p class="dl-nota">Se serve lo schema, scrivilo davanti: <code>DWH.FI_GAN_L4</code>. Lascia vuoto un campo per non controllare quella tabella.</p>
+			</details>
+
+			<div class="dl-azioni">
+				<button type="button" class="dl-btn dl-btn-primary" id="dl-prova"><i class="bi bi-plug"></i>Prova collegamento</button>
+				<button type="button" class="dl-btn dl-btn-outline" id="dl-info-btn"><i class="bi bi-hdd-network"></i>Info server Portale</button>
+				<span class="dl-attesa" id="dl-prova-attesa" hidden><span class="dl-spinner"></span>Prova in corso…</span>
+			</div>
+
+			<div id="dl-passi"></div>
+			<div id="dl-info"></div>
+		</section>
+
+		<section class="dl-card" id="sez-query">
+			<header class="dl-card-head">
+				<h2><span class="dl-num">2</span>Query (nell'ordine di Access)</h2>
+			</header>
+			<p class="dl-intro">Le query di Access tradotte in SQL che vale per tutti i database. Funzioni come <code>Year(Date())</code> e <code>CVDate</code> sono diventate segnaposto che la pagina riempie nel formato del dialetto scelto: <code>{INIZIO_ANNO}</code> = 1/1 di quest'anno, <code>{INIZIO_ANNO_PREC}</code>, <code>{INIZIO_ANNO_SUCC}</code>, <code>{OGGI}</code>. <code>{CDA_COSTRUTTORI}</code> diventa l'elenco della sezione 3. Il testo si può modificare: resta salvato in questo browser.</p>
+			<div id="dl-query"></div>
+		</section>
+
+		<section class="dl-card" id="sez-test">
+			<header class="dl-card-head">
+				<h2><span class="dl-num">3</span>Database di test (nostro, DriveLineTest)</h2>
+				<span class="dl-badge" id="dl-test-stato">…</span>
+			</header>
+
+			<div class="dl-griglia-2">
+				<div>
+					<h3 class="dl-h3">CDA costruttori</h3>
+					<p class="dl-nota">È la tabella <code>[CDA-COSTRUTTORI]</code> di Access: le query 0005 e 0010 leggono solo questi CDA. Uno per riga; dopo un <kbd>Tab</kbd> o un <kbd>;</kbd> si può scrivere la descrizione.</p>
+					<textarea id="dl-cda" rows="7" spellcheck="false" placeholder="es.&#10;N09&#10;N10;Costruttore B"></textarea>
+					<div class="dl-azioni">
+						<button type="button" class="dl-btn dl-btn-primary dl-btn-sm" id="dl-cda-salva"><i class="bi bi-check-circle"></i>Salva elenco</button>
+						<span class="dl-nota" id="dl-cda-info"></span>
+					</div>
+				</div>
+				<div>
+					<h3 class="dl-h3">Guarda le tabelle</h3>
+					<p class="dl-nota">Prime righe di quello che è stato salvato nel database di test.</p>
+					<div class="dl-tabelle-btn" id="dl-tabelle-btn"></div>
+				</div>
+			</div>
+			<div id="dl-vedi"></div>
+		</section>
+
+		<section class="dl-card" id="sez-dlt">
+			<header class="dl-card-head">
+				<h2><span class="dl-num">4</span>File DLT.TXT → N09J0121_DLT</h2>
+			</header>
+			<p class="dl-intro">Se <code>N09J0121_DLT</code> non è nel database ma arriva come file a larghezza fissa (come il DLT.TXT di oggi), si carica da qui. Prima si vede l'anteprima con il tracciato; se qualcosa non torna non si scrive nulla.</p>
+			<div class="dl-azioni">
+				<label class="dl-btn dl-btn-outline dl-file">
+					<i class="bi bi-file-earmark-text"></i><span id="dl-dlt-nome">Scegli il file…</span>
+					<input type="file" id="dl-dlt-file" accept=".txt,.TXT,text/plain">
+				</label>
+				<button type="button" class="dl-btn dl-btn-primary" id="dl-dlt-carica" disabled><i class="bi bi-database-up"></i>Carica in N09J0121_DLT</button>
+				<span class="dl-attesa" id="dl-dlt-attesa" hidden><span class="dl-spinner"></span>Lettura…</span>
+			</div>
+			<div id="dl-dlt-out"></div>
+		</section>
+
+	</main>
+
+	<div class="dl-toast" id="dl-toast" role="status" aria-live="polite" hidden></div>
+	<div id="footer-placeholder"></div>
+
+	<script src="JS/Portal/header-loader.js?v=4"></script>
+	<script src="JS/DriveLine/DriveLine.js?v=1"></script>
+</body>
+</html>

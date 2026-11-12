@@ -1,12 +1,9 @@
 <!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style>
-<!-- Ruoli che possono aprire questa pagina (separati da virgola, es. "Certificati,Safety").
-     Vuoto = tutti gli utenti collegati. Admin entra sempre. -->
 <meta name="ruoli" content="">
 </head><body>
 <title>Unisci Excel</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
 <style>
-/* Layout: one narrow working column, three steps stacked top to bottom, result table full width at the end. */
 :root{
   --bg:#f3f5f4; --surface:#ffffff; --fg:#17211e; --muted:#5d6b66; --line:#d5dcd9;
   --accent:#0f6b55; --accent-fg:#ffffff; --accent-soft:#e2f0eb; --warn:#8a5a00; --warn-soft:#fbf1d9; --bad:#a3322b;
@@ -140,7 +137,6 @@ tr.gap td{text-align:center;color:var(--muted);font-family:var(--sans);font-size
 const $ = id => document.getElementById(id);
 const U = XLSX.utils;
 
-// ---------- state ----------
 const S = { a:null, b:null, keep:new Set(), sample:true };
 
 function sampleBook(rows){
@@ -162,7 +158,6 @@ function loadSamples(){
     ['A-1047','Ferramenta Bianchi','Torino','20/02/2026',521.3]])};
 }
 
-// ---------- reading ----------
 function grid(f){
   const ws = f.wb.Sheets[f.sheet];
   if(!ws || !ws['!ref']) return {ws:{}, r0:0, r1:-1, c0:0, c1:-1};
@@ -191,7 +186,6 @@ function headers(g){
   return out;
 }
 
-// ---------- merge ----------
 function build(){
   const res = { head:[], rows:[], nA:0, nB:0, warn:'' };
   if(!S.a) return res;
@@ -257,7 +251,6 @@ function toWorkbook(res){
   return wb;
 }
 
-// ---------- rendering ----------
 function el(tag, txt, cls){ const e = document.createElement(tag); if(txt !== undefined) e.textContent = txt; if(cls) e.className = cls; return e; }
 
 function renderFile(k){
@@ -302,7 +295,6 @@ function renderResult(){
   const tb = el('tbody');
   const addRow = row => { const tr = el('tr'); row.forEach(x => { const td = el('td', text(x)); td.title = td.textContent; tr.appendChild(td); }); tb.appendChild(tr); };
   const gap = n => { const tr = el('tr', undefined, 'gap'), td = el('td', '… altre ' + n + ' righe …'); td.colSpan = res.head.length; tr.appendChild(td); tb.appendChild(tr); };
-  // show the start of each file's block so the join is visible
   const showA = Math.min(res.nA, 4), showB = Math.min(res.nB, 4);
   res.rows.slice(0, showA).forEach(addRow);
   if(res.nA > showA) gap(res.nA - showA);
@@ -320,14 +312,13 @@ function renderAll(resetCols){
 
 function say(msg, err){ const s = $('status'); s.textContent = msg || ''; s.className = err ? 'err' : ''; }
 
-// ---------- file input ----------
 async function take(k, file){
   if(!file) return;
   say('');
   try{
     const wb = XLSX.read(await file.arrayBuffer(), {type:'array', cellNF:true, cellDates:false});
     if(!wb.SheetNames.length) throw new Error('vuoto');
-    if(S.sample){ S.a = null; S.b = null; S.sample = false; }   // drop the examples at the first real file
+    if(S.sample){ S.a = null; S.b = null; S.sample = false; }
     S[k === 'A' ? 'a' : 'b'] = { name:file.name, wb, sheet:wb.SheetNames[0] };
     renderAll(k === 'A' || !S.a);
   }catch(e){
@@ -351,7 +342,6 @@ $('none').addEventListener('click', () => { S.keep.clear(); renderCols(); render
   renderResult();
 }));
 
-// ---------- save ----------
 const downloadsP = (window.claude && window.claude.use) ? window.claude.use('downloads').catch(() => null) : Promise.resolve(null);
 
 $('save').addEventListener('click', async () => {
@@ -389,6 +379,5 @@ renderAll(true);
 })();
 </script>
 
-<!-- Login e ruoli (meta name="ruoli" qui sopra) -->
 <script src="JS/Portal/header-loader.js?v=4"></script>
 </body></html>

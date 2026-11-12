@@ -6,12 +6,10 @@
 	<title>Accedi - Portale Servizi</title>
 	<link rel="icon" type="image/png" href="IMG/LOGHI/Logo.png">
 
-	<!-- CSS della pagina di accesso -->
 	<link rel="stylesheet" href="CSS/Login/Login.css">
 </head>
 <body>
 
-	<!-- Barra in alto: non usa Header.html perché per leggerlo servirebbe già il login -->
 	<nav class="login-nav">
 		<img src="IMG/LOGHI/Logo.png" alt="FPT Logo">
 		<span>Portale Servizi</span>
@@ -26,10 +24,8 @@
 				<button type="button" class="login-tab" id="tab-register" role="tab" aria-selected="false" aria-controls="form-register" data-form="register" tabindex="-1">Registrati</button>
 			</div>
 
-			<!-- Messaggi (errori in rosso, conferme in verde) -->
 			<div class="login-message" id="login-message" aria-live="polite" hidden></div>
 
-			<!-- Accedi -->
 			<form id="form-login" class="login-form" role="tabpanel" aria-labelledby="tab-login" novalidate>
 				<label for="login-username">Nome utente</label>
 				<input type="text" id="login-username" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="50" autofocus>
@@ -43,7 +39,6 @@
 				<button type="submit" class="login-submit">Accedi</button>
 			</form>
 
-			<!-- Registrati -->
 			<form id="form-register" class="login-form" role="tabpanel" aria-labelledby="tab-register" novalidate hidden>
 				<label for="reg-nome">Nome e cognome</label>
 				<input type="text" id="reg-nome" autocomplete="name" maxlength="100">

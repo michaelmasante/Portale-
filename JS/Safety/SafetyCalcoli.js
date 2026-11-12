@@ -1,18 +1,3 @@
-/* ============ Safety - calcoli (IFI / ISI) ============
-   Solo funzioni di calcolo, nessun disegno: le usano le tabelle (Safety.js) e la presentazione (SafetyReport.js).
-   Le formule sono quelle del file CALCOLI_X_TOOL_MFG_e_NMFG.xlsx:
-
-     IFI = LTI x 100.000 / ore lavorate         ISI = giorni persi x 1.000 / ore lavorate
-     YTD  = somma da gennaio al mese del report (anno del report)
-     12MR = somma degli ultimi 12 mesi fino al mese del report (mesi dopo il report dell'anno prima + mesi fino al report)
-     FY   = somma dei 12 mesi dell'anno
-
-   Le somme si fanno su TUTTE le location del file (o del gruppo): una location con 0 ore conta comunque i suoi LTI.
-   Una cella vuota vale 0 nelle somme.
-
-   Dati (come arrivano da API/Safety.ashx?action=dati):
-     dati.valori[parametro][anno][location] = [12 valori o null]   parametro: "WH", "LTI", "DAYS" */
-
 (function (root) {
 	"use strict";
 
@@ -25,7 +10,6 @@
 		return (a && a[loc]) || null;
 	}
 
-	/* Elenco delle location di un anno (unione dei parametri), in ordine alfabetico come nella pagina web. */
 	function location(dati, anno) {
 		const set = new Set();
 		["WH", "LTI", "DAYS"].forEach(par => {
@@ -39,7 +23,6 @@
 		return nomi.slice().sort((a, b) => a.localeCompare(b, "en", { sensitivity: "base" }));
 	}
 
-	/* Somma di un parametro su un insieme di location e su un elenco di mesi [{anno, mese(0-11)}]. */
 	function somma(dati, par, locs, mesi) {
 		let s = 0;
 		locs.forEach(loc => {
@@ -52,14 +35,12 @@
 		return s;
 	}
 
-	/* Totali mensili (12 numeri) di un parametro su un insieme di location. */
 	function mensili(dati, par, anno, locs) {
 		const out = [];
 		for (let m = 0; m < 12; m++) out.push(somma(dati, par, locs, [{ anno, mese: m }]));
 		return out;
 	}
 
-	/* true se nel mese c'e' almeno un valore (anche 0) per le ore lavorate */
 	function meseCompilato(dati, anno, mese, locs) {
 		return locs.some(loc => {
 			const r = riga(dati, "WH", anno, loc);
@@ -67,7 +48,6 @@
 		});
 	}
 
-	/* Anno e mese (0-11) dell'ultimo dato disponibile: ultimo mese con ore lavorate > 0. */
 	function ultimoMese(dati) {
 		const anni = Object.keys((dati.valori && dati.valori.WH) || {}).map(Number).sort((a, b) => b - a);
 		for (const anno of anni) {
@@ -98,7 +78,6 @@
 		return ore > 0 ? num * fattore / ore : null;
 	}
 
-	/* Indice ("IFI" / "ISI") su un elenco di mesi. Restituisce { valore, casi, ore }. */
 	function indice(dati, tipo, locs, mesi) {
 		const casi = somma(dati, PARAMETRO[tipo], locs, mesi);
 		const ore = somma(dati, "WH", locs, mesi);
@@ -110,13 +89,10 @@
 	function fy(dati, tipo, locs, anno) { return indice(dati, tipo, locs, mesiFy(anno)); }
 	function mese1(dati, tipo, locs, anno, mese) { return indice(dati, tipo, locs, [{ anno, mese }]); }
 
-	/* Arrotondamento a 3 decimali: lo stesso che si vede, usato anche per i confronti con i target. */
 	function r3(v) {
 		return v == null ? null : Math.round(v * 1000 + 1e-9) / 1000;
 	}
 
-	/* Colore rispetto al target: verde in linea, giallo fino al 20% sopra, rosso oltre.
-	   Target 0: verde solo se il valore e' 0. Con treColori=false: verde / rosso. */
 	function colore(valore, target, treColori) {
 		if (valore == null || target == null) return "none";
 		const v = r3(valore);
@@ -125,16 +101,6 @@
 		if (treColori !== false && v <= target * 1.2 + 1e-9) return "yellow";
 		return "red";
 	}
-
-	/* ================= lettura del file Excel =================
-	   Formato (file "database_x_tool_web_calcolo_MFG_e_NMFG.xlsx"): un foglio per perimetro ("MFG", "NMFG");
-	   in ogni foglio uno o più blocchi che iniziano con la riga d'intestazione
-	       Location Name | Parameter Name | Jan-2025 | Feb-2025 | ... | Dec-2026
-	   seguita da una riga per location e (facoltativa) la riga TOT. Le date in intestazione possono essere testo
-	   ("Jan-2025") o date vere di Excel. Gli anni si leggono dall'intestazione: nel 2027 basta aggiungere le colonne.
-
-	   righe = foglio come array di array (SheetJS sheet_to_json(ws, { header: 1, raw: true, defval: null })).
-	   dataExcel = funzione che converte il numero di serie di Excel in { y, m } (XLSX.SSF.parse_date_code). */
 
 	const MESI_EN = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
 	const MESI_IT = ["gen", "feb", "mar", "apr", "mag", "giu", "lug", "ago", "set", "ott", "nov", "dic"];
@@ -164,7 +130,6 @@
 		return null;
 	}
 
-	/* Intestazione di colonna -> { anno, mese(0-11) } oppure null */
 	function meseDi(v, dataExcel) {
 		if (v == null || v === "") return null;
 		if (v instanceof Date) {
@@ -196,7 +161,6 @@
 		return null;
 	}
 
-	/* Valore di una cella: numero, null (vuota) oppure { errore } */
 	function numeroDi(v) {
 		if (v == null) return null;
 		if (typeof v === "number") return isFinite(v) ? v : { errore: true };
@@ -210,7 +174,6 @@
 		return isFinite(n) && t !== "" ? n : { errore: true };
 	}
 
-	/* Riga dei totali: "TOT" (file database_x_tool...) oppure il nome del perimetro "MFG" / "NMFG" / "IVG MFG" (file CALCOLI) */
 	function eTotale(nome, perimetro) {
 		const n = norm(nome);
 		const p = String(perimetro || "").toLowerCase();
@@ -218,7 +181,6 @@
 			n === p || n === "ivg " + p || n === p + " ww";
 	}
 
-	/* Legge un foglio. Restituisce { perimetro, blocchi: [ { parametro, anni: {anno: [[loc, 12 valori]]}, riga } ], errori, avvisi } */
 	function leggiFoglio(nomeFoglio, righe, dataExcel) {
 		const perimetro = perimetroDelFoglio(nomeFoglio);
 		const out = { foglio: nomeFoglio, perimetro, blocchi: [], errori: [], avvisi: [] };
@@ -278,13 +240,9 @@
 				out.errori.push(`Foglio ${nomeFoglio}, riga ${nRiga}: la location "${nome}" compare due volte nello stesso blocco.`);
 				return;
 			}
-			blocco.location.push({ nome, riga: nRiga, valori }); // con errori il caricamento resta bloccato, ma i totali di controllo restano giusti
+			blocco.location.push({ nome, riga: nRiga, valori });
 		});
 
-		// controlli per blocco
-		/* Si usa il PRIMO blocco di ogni parametro. I blocchi successivi con lo stesso parametro (nel file CALCOLI sono le
-		   sezioni BUS, PWT EU, TRUCK EU, LATAM... che ripetono le stesse location) non si caricano: si controlla solo
-		   che i valori coincidano con il primo blocco. */
 		const principali = {};
 		const ripetuti = [];
 		out.blocchi = out.blocchi.filter(b => b.parametro && b.location.length).filter(b => {
@@ -298,7 +256,7 @@
 				const base = principali[b.parametro];
 				b.location.forEach(l => {
 					const ref = base.location.find(x => x.nome.toLowerCase() === l.nome.toLowerCase());
-					if (!ref) return; // righe di subtotale del gruppo (BUS, PWT EU...): non sono location
+					if (!ref) return;
 					b.colonne.forEach(col => {
 						const k = col.anno + "-" + col.mese;
 						const a = l.valori[k], v = ref.valori[k];
@@ -336,7 +294,6 @@
 			});
 		});
 
-		// le location dei blocchi dello stesso foglio dovrebbero essere le stesse
 		const wh = out.blocchi.find(b => b.parametro === "WH");
 		if (wh) {
 			const nomiWh = new Set(wh.location.map(l => l.nome.toLowerCase()));

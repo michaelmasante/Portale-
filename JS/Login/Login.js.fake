@@ -6,8 +6,6 @@
 	const tabs = [...document.querySelectorAll(".login-tab")];
 	const forms = { login: document.getElementById("form-login"), register: document.getElementById("form-register") };
 
-	/* Dove andare dopo l'accesso: ASP.NET manda qui con ?ReturnUrl=/Pagina.html
-	 Si accettano solo indirizzi interni al sito (la stessa regola è ripetuta dal server).*/
 	function safeTarget(url) {
 		if (!url || url.length > 500 || /[\x00-\x1f\\]/.test(url)) return HOME;
 		const internal = (url[0] === "/" && url.slice(0, 2) !== "//") || /^[A-Za-z0-9_.-]+\.html(\?\S*)?$/.test(url);
@@ -18,13 +16,11 @@
 	}
 	const target = safeTarget(new URLSearchParams(window.location.search).get("ReturnUrl"));
 
-	/* Già collegato (o login di sviluppo attivo in locale, voce LoginSviluppo nel Web.config): si entra subito */
 	fetch(API + "?action=me", { credentials: "same-origin", cache: "no-store" })
 		.then(res => res.json())
 		.then(d => { if (d.authenticated) window.location.replace(target); })
-		.catch(() => { /* resta la pagina di login */ });
+		.catch(() => {  });
 
-	/* ---- messaggi ---- */
 	function showMessage(text, kind) {
 		message.textContent = text;
 		message.className = "login-message " + (kind === "ok" ? "is-ok" : "is-error");
@@ -40,7 +36,6 @@
 		if (inputs[0]) inputs[0].focus();
 	}
 
-	/* ---- schede Accedi / Registrati ---- */
 	function showForm(name, focus) {
 		tabs.forEach(t => {
 			const on = t.dataset.form === name;
@@ -63,7 +58,6 @@
 		});
 	});
 
-	/* ---- mostra / nascondi la password ---- */
 	document.querySelectorAll(".login-eye").forEach(btn => {
 		btn.addEventListener("click", () => {
 			const input = document.getElementById(btn.dataset.target);
@@ -74,7 +68,6 @@
 		});
 	});
 
-	/* ---- chiamata al server ---- */
 	function post(action, data) {
 		return fetch(API + "?action=" + action, {
 			method: "POST",
@@ -85,7 +78,6 @@
 			.catch(() => ({ ok: false, message: "Il servizio di accesso non risponde. Avvisa l'amministratore." }));
 	}
 
-	/* Disabilita il pulsante mentre si aspetta la risposta */
 	function busy(form, on, label) {
 		const btn = form.querySelector(".login-submit");
 		if (on) { btn.dataset.label = btn.textContent; btn.textContent = "Attendere..."; }
@@ -93,7 +85,6 @@
 		btn.disabled = on;
 	}
 
-	/* ---- Accedi ---- */
 	forms.login.addEventListener("submit", e => {
 		e.preventDefault();
 		clearMessage();
@@ -115,7 +106,6 @@
 		});
 	});
 
-	/* ---- Registrati ---- */
 	forms.register.addEventListener("submit", e => {
 		e.preventDefault();
 		clearMessage();
@@ -144,7 +134,6 @@
 				showMessage(d.message || "Registrazione non riuscita.", "error");
 				return;
 			}
-			// registrazione fatta: si torna alla scheda Accedi con il nome utente già scritto
 			const name = user.value.trim();
 			forms.register.reset();
 			showForm("login", false);
@@ -155,9 +144,8 @@
 		});
 	});
 
-	/* Chi ha già fatto il login non deve rivedere questa pagina */
 	fetch(API + "?action=me", { credentials: "same-origin", cache: "no-store" })
 		.then(res => res.json())
 		.then(d => { if (d && d.authenticated) window.location.replace(target); })
-		.catch(() => { /* server non raggiungibile: si resta qui */ });
+		.catch(() => {  });
 });

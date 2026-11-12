@@ -73,9 +73,8 @@
         font-size: 0.9rem;
     }
 
-/* Utente collegato e pulsante Esci: sempre in alto a destra nella barra */
 #header-placeholder .nav-user {
-    margin-left: auto; /* spinge il blocco all'estremità destra */
+    margin-left: auto;
     display: flex;
     align-items: center;
     gap: 12px;
@@ -106,7 +105,7 @@
     flex-direction: column;
     line-height: 1.2;
     text-align: right;
-    order: -1; /* testo a sinistra dell'avatar */
+    order: -1;
 }
 
 #header-placeholder .nav-user-name {
@@ -146,7 +145,6 @@
         text-decoration: none;
     }
 
-/* Schermi stretti: solo avatar ed Esci */
 @media (max-width: 640px) {
     #header-placeholder .nav-user-text {
         display: none;

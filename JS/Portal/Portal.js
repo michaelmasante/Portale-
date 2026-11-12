@@ -2,6 +2,7 @@
     const REDIRECTS = {
         Cercavert: "Cercavert.html",
         Certificati: "Certificati.html",
+        DriveLine: "DriveLine.html",
         Prossimamente: "LavoriInCorso.html",
         RepairTracker: "RepairTracker.html",
         Safety: "Safety.html",
@@ -41,8 +42,6 @@
     }
     addVersionToFooter();
 
-    /* Tile bloccate: i ruoli si scrivono SOLO nella pagina di destinazione (<meta name="ruoli" ...>).
-       Qui si legge quel meta e, se l'utente non ha il ruolo, la tile diventa grigia con il lucchetto. */
     function ruoliDellaPagina(url) {
         return fetch(url, { credentials: "same-origin", cache: "no-cache" })
             .then(res => (res.ok && !res.redirected) ? res.text() : "")
@@ -81,7 +80,7 @@
     document.querySelectorAll("[data-redirect]").forEach(function (el) {
         el.addEventListener("click", function (ev) {
             ev.preventDefault();
-            if (el.dataset.bloccata) return; // l'utente non ha il ruolo per questa pagina
+            if (el.dataset.bloccata) return;
             const key = el.getAttribute("data-redirect");
             const url = REDIRECTS[key];
             if (url && url !== "#") {

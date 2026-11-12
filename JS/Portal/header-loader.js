@@ -1,43 +1,22 @@
-﻿/* ============ Ruoli: chi vede cosa ============
- I ruoli dell'utente arrivano da API/Auth.ashx?action=me (nel database ci sono solo i ruoli).
- Cosa vede ogni ruolo si decide nelle pagine:
-
-   - QUALI RUOLI POSSONO APRIRE UNA PAGINA: nell'<head> della pagina
-         <meta name="ruoli" content="Certificati">
-     Più ruoli separati da virgola ("Certificati,Safety"): basta averne uno.
-     content vuoto = la pagina la vedono tutti gli utenti collegati.
-     Chi non ha il ruolo torna alla Home; nella Home la sua tile appare bloccata (Portal.js legge lo stesso meta).
-   - un elemento con data-ruoli="Certificati,Safety" si vede solo con almeno uno di quei ruoli;
-   - un elemento senza data-ruoli si vede sempre;
-   - il ruolo Admin vede tutto.
-
- Dal JavaScript di una pagina: PortaleUtente.ha("Safety") dopo l'evento "portale:utente"
- (es. document.addEventListener("portale:utente", e => { if (e.detail.ha("Safety")) ... })).
-
- Limite: il blocco è nel browser. Chi conosce l'indirizzo di un file può comunque scaricarlo
- se ha fatto il login; solo API/GestioneUtenti.ashx controlla il ruolo sul server. */
-
-(function () {
+﻿(function () {
 	const ADMIN = "admin";
-	const HEADER_CACHE = "portal_header_html_v4"; // cambiarlo quando si modifica Header.html
+	const HEADER_CACHE = "portal_header_html_v4"; // cambiare quando si modifica Header.html
 
 	const style = document.createElement("style");
 	style.textContent = "[data-ruoli]:not(.ruolo-ok){display:none!important}";
 	document.head.appendChild(style);
 
-	// Pagina riservata: si nasconde subito, prima che il browser la mostri, finché non si sa se l'utente può vederla
 	const pageMeta = document.querySelector('meta[name="ruoli"]');
 	const pageRoles = pageMeta ? pageMeta.getAttribute("content") : "";
 	const pageRiservata = lista(pageRoles).length > 0;
 	if (pageRiservata) document.documentElement.style.visibility = "hidden";
 
-	let utente = null; // risposta di "me", quando arriva
+	let utente = null;
 
 	function lista(text) {
 		return String(text || "").split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
 	}
 
-	/* true se l'utente ha almeno uno dei ruoli indicati. Elenco vuoto = nessuna restrizione. */
 	function ha(ruoliRichiesti) {
 		if (!utente) return false;
 		const richiesti = lista(ruoliRichiesti);
@@ -66,7 +45,6 @@
 		return (a + b).toUpperCase();
 	}
 
-	/* Utente collegato in alto a destra: avatar, nome, ruoli e pulsante "Esci" */
 	function fillUserBox() {
 		const box = document.getElementById("nav-user");
 		if (!box || !utente || box.dataset.ready) return;
@@ -110,11 +88,9 @@
 				document.dispatchEvent(new CustomEvent("portale:utente", { detail: window.PortaleUtente }));
 			})
 			.catch(() => {
-				// server non raggiungibile: si vede solo ciò che non richiede ruoli
 				if (pageRiservata) window.location.replace("Portale.html");
 			});
 
-		/* Header e footer condivisi */
 		const headerPlaceholder = document.getElementById("header-placeholder");
 		if (headerPlaceholder) {
 			const showHeader = html => {
@@ -128,7 +104,7 @@
 			} else {
 				fetch("Header.html", { cache: "no-cache" })
 					.then(response => {
-						if (response.redirected) { goToLogin(); throw new Error("Sessione scaduta"); } // al posto dell'header sarebbe arrivata la pagina di login
+						if (response.redirected) { goToLogin(); throw new Error("Sessione scaduta"); }
 						if (!response.ok) throw new Error("Header.html non trovato");
 						return response.text();
 					})
@@ -144,7 +120,7 @@
 		if (footerPlaceholder) {
 			fetch("Footer.html")
 				.then(res => {
-					if (res.redirected) throw new Error("Sessione scaduta"); // sarebbe arrivata la pagina di login
+					if (res.redirected) throw new Error("Sessione scaduta");
 					return res.text();
 				})
 				.then(data => {
