@@ -19,7 +19,8 @@ public class CertificatiHandler : IHttpHandler
 	private const string LoginConnection = "PortaleLogin";
 	private const string Admin = "Admin";
 	private const string RuoloUpload = "Certificati Upload";
-	private static readonly string[] RuoliAccesso = { "Certificati", RuoloUpload, Admin };
+	private const string RuoloModifica = "Certificati Modifica";
+	private static readonly string[] RuoliAccesso = { "Certificati", RuoloUpload, RuoloModifica, Admin };
 	private const int MaxBodyChars = 100 * 1024 * 1024;
 	private const int MaxRighe = 500000;
 	private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
@@ -78,6 +79,9 @@ public class CertificatiHandler : IHttpHandler
 		new Col("Note", "Note", 4000),
 		new Col("Dati", "Dati", 1000000)
 	};
+	// Campi del Tracker che si possono cambiare dal web (Famiglia solo sulle famiglie nuove)
+	private static readonly string[] EpaModificabili = { "Ordine", "EpaSottomissione", "EpaSottomissioneSett", "EpaApprovazione", "EpaApprovazioneSett",
+		"CarbSottomissione", "CarbSottomissioneSett", "CarbApprovazione", "CarbApprovazioneSett", "Rischio", "Note" };
 
 	private class UserException : Exception
 	{
@@ -139,6 +143,13 @@ public class CertificatiHandler : IHttpHandler
 				if (!u.Ha(RuoloUpload)) throw new ForbiddenException("Per caricare i file serve il ruolo \"" + RuoloUpload + "\". Chiedilo a un amministratore.");
 				if (req.HttpMethod != "POST" || req.Headers["X-Portale"] != "1") throw new UserException("Richiesta non valida.");
 				Carica(context, u, ReadJson(context));
+				return;
+			}
+			if (action == "salvaepa")
+			{
+				if (!u.Ha(RuoloModifica)) throw new ForbiddenException("Per modificare il Tracker serve il ruolo \"" + RuoloModifica + "\". Chiedilo a un amministratore.");
+				if (req.HttpMethod != "POST" || req.Headers["X-Portale"] != "1") throw new UserException("Richiesta non valida.");
+				SalvaEpa(context, u, ReadJson(context));
 				return;
 			}
 			throw new UserException("Richiesta non valida.");
@@ -259,6 +270,7 @@ public class CertificatiHandler : IHttpHandler
 		{
 			d["righe"] = LeggiRighe(cn, sql.ToString(), EpaCols.Length);
 			d["ultimo"] = UltimoCaricamento(cn);
+			d["modificheWeb"] = ModificheWeb(cn, null);
 		}
 		Reply(ctx, d);
 	}
@@ -403,6 +415,17 @@ public class CertificatiHandler : IHttpHandler
 			dt.Rows.Add(dr);
 		}
 		if (errori.Count > 0) throw new UserException("Il file ha errori, nel database non e' cambiato niente: " + string.Join(" ", errori.ToArray()));
+
+		if (tipo == "epa")
+		{
+			Dictionary<string, object> mw;
+			using (SqlConnection cn = Open(EpaConnection)) mw = ModificheWeb(cn, null);
+			int n = mw == null ? 0 : (int)mw["n"];
+			int viste = body.ContainsKey("modificheWebViste") && body["modificheWebViste"] != null ? Convert.ToInt32(body["modificheWebViste"], Inv) : 0;
+			if (n > viste)
+				throw new UserException("Dopo l'ultimo Excel sono state fatte " + n + " modifiche dal web (ultima il " + mw["ultima"] + " da " + mw["utente"] +
+					"). Caricando il file andrebbero perse: riapri il file per vedere l'avviso e conferma di nuovo.");
+		}
 
 		Dictionary<string, object> d = tipo == "shoporder" ? CaricaShopOrder(dt, cols, u, file, foglio)
 			: tipo == "tag" ? CaricaTag(dt, cols, u, file, foglio)
@@ -625,6 +648,238 @@ public class CertificatiHandler : IHttpHandler
 		d["tolte"] = tolte;
 		d["invariate"] = dt.Rows.Count - nuove;
 		return d;
+	}
+
+	private static bool TabellaModifiche(SqlConnection cn, SqlTransaction tx)
+	{
+		using (SqlCommand cmd = new SqlCommand("SELECT CASE WHEN OBJECT_ID(N'dbo.EpaModifiche', N'U') IS NULL THEN 0 ELSE 1 END", cn, tx))
+			return (int)cmd.ExecuteScalar() == 1;
+	}
+
+	// Modifiche fatte dal web dopo l'ultimo caricamento Excel (null se manca la tabella)
+	private static Dictionary<string, object> ModificheWeb(SqlConnection cn, SqlTransaction tx)
+	{
+		if (!TabellaModifiche(cn, tx)) return null;
+		Dictionary<string, object> d = new Dictionary<string, object>();
+		using (SqlCommand cmd = new SqlCommand(
+			"DECLARE @c int = ISNULL((SELECT MAX(Id) FROM dbo.Caricamenti), 0); " +
+			"SELECT COUNT(*), COUNT(DISTINCT Famiglia), MAX(DataOra), " +
+			"(SELECT TOP 1 NomeUtente FROM dbo.EpaModifiche WHERE CaricamentoId = @c ORDER BY Id DESC) " +
+			"FROM dbo.EpaModifiche WHERE CaricamentoId = @c;", cn, tx))
+		using (SqlDataReader r = cmd.ExecuteReader())
+		{
+			r.Read();
+			d["n"] = r.GetInt32(0);
+			d["famiglie"] = r.GetInt32(1);
+			d["ultima"] = r.IsDBNull(2) ? null : r.GetDateTime(2).ToString("dd/MM/yyyy HH:mm", Inv);
+			d["utente"] = r.IsDBNull(3) ? null : r.GetString(3);
+		}
+		return d;
+	}
+
+	private static string ValoreEpa(object v, Col c, string famiglia, List<string> errori)
+	{
+		string s = v == null ? null : Convert.ToString(v, Inv).Trim();
+		if (string.IsNullOrEmpty(s)) return null;
+		if (s.Length > c.Max) { errori.Add(famiglia + ", " + c.Excel + ": testo troppo lungo (" + s.Length + " caratteri, massimo " + c.Max + ")."); return null; }
+		return s;
+	}
+
+	private static bool Uguali(string a, string b)
+	{
+		return string.Equals((a ?? "").Trim(), (b ?? "").Trim(), StringComparison.Ordinal);
+	}
+
+	private static Dictionary<string, string> LeggiFamiglia(SqlConnection cn, SqlTransaction tx, string famiglia)
+	{
+		StringBuilder sql = new StringBuilder("SELECT TOP 1 Famiglia");
+		foreach (string c in EpaModificabili) sql.Append(", [").Append(c).Append("]");
+		sql.Append(" FROM dbo.EpaFamiglie WITH (UPDLOCK, HOLDLOCK) WHERE Famiglia = @f");
+		using (SqlCommand cmd = new SqlCommand(sql.ToString(), cn, tx))
+		{
+			cmd.Parameters.Add("@f", SqlDbType.NVarChar, 50).Value = famiglia;
+			using (SqlDataReader r = cmd.ExecuteReader())
+			{
+				if (!r.Read()) return null;
+				Dictionary<string, string> d = new Dictionary<string, string>();
+				d["Famiglia"] = r.GetString(0);
+				for (int i = 0; i < EpaModificabili.Length; i++)
+					d[EpaModificabili[i]] = r.IsDBNull(i + 1) ? null : Convert.ToString(r.GetValue(i + 1), Inv);
+				return d;
+			}
+		}
+	}
+
+	private static Col ColEpa(string nome)
+	{
+		foreach (Col c in EpaCols) if (string.Equals(c.Db, nome, StringComparison.Ordinal)) return c;
+		return null;
+	}
+
+	private static Dictionary<string, object> Campi(Dictionary<string, object> o, string key)
+	{
+		object v;
+		Dictionary<string, object> d = o.TryGetValue(key, out v) ? v as Dictionary<string, object> : null;
+		if (d == null) throw new UserException("Richiesta non valida.");
+		return d;
+	}
+
+	private static void LogModifica(SqlConnection cn, SqlTransaction tx, Utente u, int caricamento, string famiglia, string azione, string campo, string prima, string dopo)
+	{
+		using (SqlCommand cmd = new SqlCommand(
+			"INSERT INTO dbo.EpaModifiche (CaricamentoId, Username, NomeUtente, Famiglia, Azione, Campo, Prima, Dopo) " +
+			"VALUES (@c, @u, @n, @f, @a, @campo, @p, @d)", cn, tx))
+		{
+			cmd.Parameters.Add("@c", SqlDbType.Int).Value = caricamento;
+			cmd.Parameters.Add("@u", SqlDbType.NVarChar, 50).Value = Cut(u.Username, 50);
+			cmd.Parameters.Add("@n", SqlDbType.NVarChar, 150).Value = Cut(u.Nome, 150);
+			cmd.Parameters.Add("@f", SqlDbType.NVarChar, 50).Value = famiglia;
+			cmd.Parameters.Add("@a", SqlDbType.NVarChar, 20).Value = azione;
+			cmd.Parameters.Add("@campo", SqlDbType.NVarChar, 50).Value = (object)campo ?? DBNull.Value;
+			cmd.Parameters.Add("@p", SqlDbType.NVarChar, -1).Value = (object)prima ?? DBNull.Value;
+			cmd.Parameters.Add("@d", SqlDbType.NVarChar, -1).Value = (object)dopo ?? DBNull.Value;
+			cmd.ExecuteNonQuery();
+		}
+	}
+
+	private static string Riassunto(Dictionary<string, string> riga)
+	{
+		JavaScriptSerializer js = new JavaScriptSerializer();
+		return js.Serialize(riga);
+	}
+
+	// Salva in un colpo solo le modifiche fatte nella scheda "Modifica Tracker": o tutte o nessuna
+	private static void SalvaEpa(HttpContext ctx, Utente u, Dictionary<string, object> body)
+	{
+		object[] modifiche = Arr(body, "modifiche", 5000);
+		object[] nuove = Arr(body, "nuove", 1000);
+		object[] eliminate = Arr(body, "eliminate", 5000);
+		if (modifiche.Length + nuove.Length + eliminate.Length == 0) throw new UserException("Non ci sono modifiche da salvare.");
+
+		List<string> errori = new List<string>();
+		int nMod = 0, nNuove = 0, nTolte = 0;
+		using (SqlConnection cn = Open(EpaConnection))
+		using (SqlTransaction tx = cn.BeginTransaction())
+		{
+			if (!TabellaModifiche(cn, tx))
+				throw new UserException("Manca la tabella dbo.EpaModifiche nel database TrackerEPA: eseguire SQL/Certificati_02_modifica_tracker.sql in SSMS.");
+			int caricamento;
+			using (SqlCommand cmd = new SqlCommand("SELECT ISNULL(MAX(Id), 0) FROM dbo.Caricamenti", cn, tx))
+				caricamento = Convert.ToInt32(cmd.ExecuteScalar(), Inv);
+
+			foreach (object o in eliminate)
+			{
+				Dictionary<string, object> e = o as Dictionary<string, object>;
+				string fam = e == null ? null : StrOpt(e, "famiglia");
+				if (string.IsNullOrWhiteSpace(fam)) throw new UserException("Richiesta non valida.");
+				Dictionary<string, string> ora = LeggiFamiglia(cn, tx, fam);
+				if (ora == null) { errori.Add(fam + ": è già stata eliminata da qualcun altro."); continue; }
+				using (SqlCommand cmd = new SqlCommand("DELETE FROM dbo.EpaFamiglie WHERE Famiglia = @f", cn, tx))
+				{
+					cmd.Parameters.Add("@f", SqlDbType.NVarChar, 50).Value = fam;
+					cmd.ExecuteNonQuery();
+				}
+				LogModifica(cn, tx, u, caricamento, ora["Famiglia"], "Eliminata", null, Riassunto(ora), null);
+				nTolte++;
+			}
+
+			foreach (object o in modifiche)
+			{
+				Dictionary<string, object> m = o as Dictionary<string, object>;
+				string fam = m == null ? null : StrOpt(m, "famiglia");
+				if (string.IsNullOrWhiteSpace(fam)) throw new UserException("Richiesta non valida.");
+				Dictionary<string, object> prima = Campi(m, "prima"), dopo = Campi(m, "dopo");
+				Dictionary<string, string> ora = LeggiFamiglia(cn, tx, fam);
+				if (ora == null) { errori.Add(fam + ": nel frattempo è stata eliminata da qualcun altro."); continue; }
+
+				List<string> set = new List<string>();
+				List<string[]> log = new List<string[]>();
+				using (SqlCommand cmd = new SqlCommand())
+				{
+					foreach (KeyValuePair<string, object> kv in dopo)
+					{
+						if (Array.IndexOf(EpaModificabili, kv.Key) < 0) throw new UserException("Campo non modificabile: " + kv.Key + ".");
+						Col c = ColEpa(kv.Key);
+						string nuovo = ValoreEpa(kv.Value, c, fam, errori);
+						string atteso = prima.ContainsKey(kv.Key) && prima[kv.Key] != null ? Convert.ToString(prima[kv.Key], Inv) : null;
+						if (!Uguali(ora[kv.Key], atteso))
+						{
+							errori.Add(fam + ", " + c.Excel + ": nel frattempo qualcun altro l'ha cambiato in \"" + (ora[kv.Key] ?? "vuoto") + "\".");
+							continue;
+						}
+						if (Uguali(ora[kv.Key], nuovo)) continue;
+						string par = "@p" + set.Count.ToString(Inv);
+						set.Add(c.Q + " = " + par);
+						cmd.Parameters.Add(par, SqlDbType.NVarChar, c.Max).Value = (object)nuovo ?? DBNull.Value;
+						log.Add(new string[] { kv.Key, ora[kv.Key], nuovo });
+					}
+					if (set.Count == 0) continue;
+					cmd.Connection = cn;
+					cmd.Transaction = tx;
+					cmd.CommandText = "UPDATE dbo.EpaFamiglie SET " + string.Join(", ", set.ToArray()) + " WHERE Famiglia = @f";
+					cmd.Parameters.Add("@f", SqlDbType.NVarChar, 50).Value = fam;
+					if (errori.Count == 0) cmd.ExecuteNonQuery();
+				}
+				foreach (string[] l in log) LogModifica(cn, tx, u, caricamento, ora["Famiglia"], "Modificata", l[0], l[1], l[2]);
+				nMod++;
+			}
+
+			foreach (object o in nuove)
+			{
+				Dictionary<string, object> n = o as Dictionary<string, object>;
+				if (n == null) throw new UserException("Richiesta non valida.");
+				Dictionary<string, object> campi = Campi(n, "campi");
+				string fam = ValoreEpa(campi.ContainsKey("Famiglia") ? campi["Famiglia"] : null, ColEpa("Famiglia"), "Famiglia nuova", errori);
+				if (fam == null) { errori.Add("Una famiglia nuova non ha il nome."); continue; }
+				if (LeggiFamiglia(cn, tx, fam) != null) { errori.Add(fam + ": esiste già."); continue; }
+
+				List<string> nomi = new List<string> { "[Famiglia]" }, valori = new List<string> { "@f" };
+				Dictionary<string, string> riga = new Dictionary<string, string>();
+				riga["Famiglia"] = fam;
+				using (SqlCommand cmd = new SqlCommand())
+				{
+					cmd.Parameters.Add("@f", SqlDbType.NVarChar, 50).Value = fam;
+					foreach (KeyValuePair<string, object> kv in campi)
+					{
+						if (kv.Key == "Famiglia") continue;
+						if (Array.IndexOf(EpaModificabili, kv.Key) < 0) throw new UserException("Campo non modificabile: " + kv.Key + ".");
+						Col c = ColEpa(kv.Key);
+						string v = ValoreEpa(kv.Value, c, fam, errori);
+						if (v == null) continue;
+						string par = "@p" + nomi.Count.ToString(Inv);
+						nomi.Add(c.Q);
+						valori.Add(par);
+						cmd.Parameters.Add(par, SqlDbType.NVarChar, c.Max).Value = v;
+						riga[kv.Key] = v;
+					}
+					if (!riga.ContainsKey("Ordine"))
+					{
+						nomi.Add("[Ordine]");
+						valori.Add("CAST(ISNULL((SELECT MAX(TRY_CAST(Ordine AS INT)) FROM dbo.EpaFamiglie), 0) + 1 AS NVARCHAR(20))");
+					}
+					cmd.Connection = cn;
+					cmd.Transaction = tx;
+					cmd.CommandText = "INSERT INTO dbo.EpaFamiglie (" + string.Join(", ", nomi.ToArray()) + ") VALUES (" + string.Join(", ", valori.ToArray()) + ")";
+					if (errori.Count == 0) cmd.ExecuteNonQuery();
+				}
+				LogModifica(cn, tx, u, caricamento, fam, "Nuova", null, null, Riassunto(riga));
+				nNuove++;
+			}
+
+			if (errori.Count > 0)
+			{
+				tx.Rollback();
+				throw new UserException("Nessuna modifica salvata: " + string.Join(" ", errori.ToArray()) + " Ricarica i dati e rifai le modifiche.");
+			}
+			tx.Commit();
+		}
+
+		Dictionary<string, object> d = new Dictionary<string, object>();
+		d["ok"] = true;
+		d["modificate"] = nMod;
+		d["nuove"] = nNuove;
+		d["eliminate"] = nTolte;
+		Reply(ctx, d);
 	}
 
 	private static void Health(HttpContext ctx)

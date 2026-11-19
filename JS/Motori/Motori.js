@@ -148,7 +148,7 @@
 	let tagSheetName = "";
 	let pnGridDiv = null;
 	let tagGridDiv = null;
-	const searchByView = { pn: "", tag: "", month: "", carica: "", epa: "", carb: "" };
+	const searchByView = { pn: "", tag: "", month: "", carica: "", epa: "", carb: "", modifica: "" };
 
 	const API_CERTIFICATI = "API/Certificati.ashx";
 
@@ -445,6 +445,7 @@
 		tabsContainer.innerHTML = "";
 		[{ id: "pn", label: "Per PN Motore" }, { id: "tag", label: "Per Tag" }, { id: "month", label: "Per Mese" },
 			{ id: "epa", label: "Tracker EPA" }, { id: "carb", label: "Tracker CARB" },
+			{ id: "modifica", label: "Modifica Tracker", ruoli: "Certificati Modifica" },
 			{ id: "carica", label: "Carica Excel", ruoli: "Certificati Upload" }].forEach(t => {
 			const btn = document.createElement("button");
 			btn.type = "button";
@@ -473,9 +474,10 @@
 		pnGridDiv.style.display = view === "pn" ? "" : "none";
 		const tracker = view === "epa" || view === "carb";
 		const filtersBox = document.querySelector(".filters-container");
-		if (filtersBox) filtersBox.style.display = view === "carica" ? "none" : "";
+		if (filtersBox) filtersBox.style.display = view === "carica" || view === "modifica" ? "none" : "";
 		if (searchInput) searchInput.style.display = tracker ? "none" : "";
 		if (window.CertificatiCarica) { if (view === "carica") window.CertificatiCarica.mostra(); else window.CertificatiCarica.nascondi(); }
+		if (window.CertificatiModifica) { if (view === "modifica") window.CertificatiModifica.mostra(); else window.CertificatiModifica.nascondi(); }
 		if (window.CertificatiEpa) { if (tracker) window.CertificatiEpa.mostra(view === "carb" ? "CARB" : "EPA"); else window.CertificatiEpa.nascondi(); }
 		if (view === "tag") ensureTagTable();
 		if (view === "month") ensureMonthView();

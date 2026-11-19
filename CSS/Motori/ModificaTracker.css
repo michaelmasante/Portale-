@@ -1,0 +1,242 @@
+.mt-vista {
+	padding-top: 14px;
+	color: #181C32;
+	font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+	.mt-vista[hidden] {
+		display: none !important;
+	}
+
+.mt-testa {
+	margin-bottom: 12px;
+}
+
+.mt-barra {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	flex-wrap: wrap;
+	background: #fff;
+	border: 1px solid #E4E6EF;
+	border-radius: 10px;
+	padding: 10px 12px;
+	margin-bottom: 10px;
+	position: sticky;
+	top: 0;
+	z-index: 3;
+}
+
+	.mt-barra .cx-btn-sm {
+		margin: 0;
+	}
+
+	.mt-barra #mt-cerca {
+		flex: 1 1 220px;
+		min-width: 180px;
+		padding: 7px 10px;
+		border: 1px solid #D1D3E0;
+		border-radius: 8px;
+		font: inherit;
+		font-size: .88rem;
+	}
+
+.mt-lucchetto {
+	font-weight: 700;
+	padding: 5px 10px;
+	border-radius: 6px;
+	background: #F1F1F4;
+	color: #3f4254;
+	white-space: nowrap;
+}
+
+	.mt-lucchetto.mt-aperto {
+		background: #FFF4DE;
+		color: #8A5A00;
+	}
+
+.mt-conta {
+	font-size: .85rem;
+	color: #7E8299;
+	white-space: nowrap;
+}
+
+	.mt-conta.mt-conta-on {
+		color: #8A5A00;
+		font-weight: 600;
+	}
+
+.mt-tabella-box {
+	overflow: auto;
+	max-height: 70vh;
+	background: #fff;
+	border: 1px solid #E4E6EF;
+	border-radius: 10px;
+}
+
+.mt-tabella {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: .84rem;
+}
+
+	.mt-tabella th {
+		background: #3f4254;
+		color: #fff;
+		text-align: left;
+		padding: 7px 8px;
+		font-weight: 600;
+		white-space: nowrap;
+		vertical-align: bottom;
+		position: sticky;
+		top: 0;
+		z-index: 2;
+	}
+
+	.mt-tabella td {
+		padding: 4px 6px;
+		border-bottom: 1px solid #EEF0F5;
+		vertical-align: top;
+	}
+
+.mt-th-sotto {
+	display: block;
+	font-size: .7rem;
+	font-weight: 400;
+	opacity: .75;
+}
+
+.mt-tabella input,
+.mt-tabella select,
+.mt-tabella textarea {
+	width: 100%;
+	box-sizing: border-box;
+	font: inherit;
+	font-size: .82rem;
+	padding: 4px 6px;
+	border: 1px solid #D1D3E0;
+	border-radius: 6px;
+	background: #fff;
+	color: #181C32;
+}
+
+	.mt-tabella input:focus,
+	.mt-tabella select:focus,
+	.mt-tabella textarea:focus {
+		outline: none;
+		border-color: #3699FF;
+		box-shadow: 0 0 0 2px rgba(54, 153, 255, .2);
+	}
+
+.mt-tabella textarea {
+	resize: vertical;
+	min-width: 220px;
+}
+
+.mt-tabella input:disabled::placeholder {
+	color: transparent;
+	-webkit-text-fill-color: transparent;
+}
+
+/* Bloccata: i campi sembrano testo normale */
+.mt-bloccata input:disabled,
+.mt-bloccata select:disabled,
+.mt-bloccata textarea:disabled,
+.mt-eliminata input:disabled,
+.mt-eliminata select:disabled,
+.mt-eliminata textarea:disabled {
+	border-color: transparent;
+	background: transparent;
+	color: #181C32;
+	opacity: 1;
+	-webkit-text-fill-color: #181C32;
+	appearance: none;
+	-webkit-appearance: none;
+	resize: none;
+}
+
+.mt-col-ord { min-width: 56px; }
+.mt-col-fam { min-width: 150px; }
+.mt-col-passo { min-width: 250px; }
+.mt-col-rischio { min-width: 100px; }
+.mt-col-az { width: 44px; }
+
+.mt-ord {
+	text-align: right;
+}
+
+.mt-fam {
+	white-space: nowrap;
+	padding-top: 8px !important;
+}
+
+.mt-passo {
+	display: flex;
+	gap: 4px;
+}
+
+	.mt-passo .mt-campo:first-child {
+		flex: 1 1 auto;
+	}
+
+	.mt-passo .mt-campo:last-child {
+		flex: 0 0 86px;
+	}
+
+.mt-campo {
+	border-radius: 7px;
+}
+
+	.mt-campo.mt-cambiato input,
+	.mt-campo.mt-cambiato select,
+	.mt-campo.mt-cambiato textarea {
+		background: #FFF4DE;
+		border-color: #FFA800;
+	}
+
+.mt-tabella input.mt-errore {
+	background: #FFE2E5;
+	border-color: #F64E60;
+}
+
+.mt-nuova td {
+	background: #EFFBF9;
+}
+
+.mt-eliminata td {
+	background: #FFF5F6;
+}
+
+	.mt-eliminata td input,
+	.mt-eliminata td select,
+	.mt-eliminata td textarea,
+	.mt-eliminata .mt-fam {
+		text-decoration: line-through;
+		color: #A8182B !important;
+		-webkit-text-fill-color: #A8182B !important;
+	}
+
+.mt-az {
+	text-align: center;
+	white-space: nowrap;
+}
+
+.mt-cestino {
+	border: 0;
+	background: transparent;
+	cursor: pointer;
+	font-size: 1rem;
+	padding: 4px 6px;
+	border-radius: 6px;
+	opacity: .6;
+}
+
+	.mt-cestino:hover {
+		opacity: 1;
+		background: #FFE2E5;
+	}
+
+.mt-vuoto {
+	text-align: center;
+	padding: 18px !important;
+}

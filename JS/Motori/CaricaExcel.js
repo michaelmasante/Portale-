@@ -347,7 +347,7 @@
 
 	async function confrontaEpa(righe) {
 		let db;
-		try { db = await datiDatabase("epa"); }
+		try { db = await datiDatabase("epa", true); }
 		catch (e) { return { errore: "Confronto col database non riuscito: " + e.message }; }
 		const iFam = db.colonne.indexOf("Famiglia");
 		const perFam = new Map(db.righe.map(r => [String(r[iFam]).toLowerCase(), r]));
@@ -371,7 +371,7 @@
 			if (diverso) cambiano++;
 		});
 		const tolte = [...perFam.keys()].filter(k => !inFile.has(k)).map(k => perFam.get(k)[iFam]);
-		return { nuove, tolte: tolte.length, nomiTolte: tolte, cambiano, cambi, totaleDb: db.righe.length, foglioDb: db.ultimo ? db.ultimo.foglio : "" };
+		return { nuove, tolte: tolte.length, nomiTolte: tolte, cambiano, cambi, totaleDb: db.righe.length, foglioDb: db.ultimo ? db.ultimo.foglio : "", modificheWeb: db.modificheWeb || null };
 	}
 
 	function disegnaAnalisi(conferma) {
@@ -391,6 +391,7 @@
 						<tbody><tr><td>Tracker EPA</td><td>${esc(f.foglio)}</td><td class="num">${num(f.righe.length)}</td><td class="num">${num(c.totaleDb)}</td><td class="num">${num(c.nuove)}</td><td class="num">${num(c.tolte)}</td><td class="num">${num(c.cambiano)}</td></tr></tbody>
 					</table>
 					${c.foglioDb ? `<p class="cx-testo cx-muted">Nel database adesso: "${esc(c.foglioDb)}".</p>` : ""}
+					${c.modificheWeb && c.modificheWeb.n ? `<div class="cx-alert cx-alert-danger"><strong>Attenzione:</strong> dopo l'ultimo Excel sono state fatte <strong>${num(c.modificheWeb.n)} modifiche dal web</strong> su ${num(c.modificheWeb.famiglie)} famiglie (ultima il ${esc(c.modificheWeb.ultima)} da ${esc(c.modificheWeb.utente)}). Caricando questo file <strong>andranno perse</strong>, a meno che non siano già anche nel file.</div>` : ""}
 					${c.cambi && c.cambi.length ? `<div class="cx-alert cx-alert-warning"><strong>Cosa cambia</strong>${c.cambiano > c.cambi.length ? " (primi " + c.cambi.length + ")" : ""}:<ul class="cx-lista">${c.cambi.map(e => `<li>${esc(e)}</li>`).join("")}</ul></div>` : ""}
 					${c.nomiTolte && c.nomiTolte.length ? `<p class="cx-testo cx-muted">Famiglie che non ci saranno più: ${c.nomiTolte.map(esc).join(", ")}.</p>` : ""}`
 			: shop
@@ -421,7 +422,7 @@
 					${conferma
 						? `<span class="cx-muted">${shop
 							? `Verranno aggiunti ${num(c.nuove)} P/N e aggiornati ${num(c.cambiano)}. Nessun P/N viene cancellato. Confermi?`
-							: epa ? `Il Tracker EPA nel database verrà sostituito da quello del file (${num(f.righe.length)} famiglie). Confermi?`
+							: epa ? `Il Tracker EPA nel database verrà sostituito da quello del file (${num(f.righe.length)} famiglie)${c.modificheWeb && c.modificheWeb.n ? ` e le ${num(c.modificheWeb.n)} modifiche fatte dal web andranno perse` : ""}. Confermi?`
 							: `Tutti i TAG nel database verranno sostituiti da quelli del file (${num(f.righe.length)} righe). Confermi?`}</span>
 						   <button type="button" class="cx-btn cx-btn-outline" data-azione="annulla">Annulla</button>
 						   <button type="button" class="cx-btn cx-btn-ok" data-azione="conferma">Sì, carica</button>`
@@ -437,8 +438,10 @@
 		const az = $("#cx-analisi .cx-azioni");
 		az.innerHTML = '<span class="cx-spinner"></span><span class="cx-muted">Caricamento in corso…</span>';
 		try {
-			const r = await api("carica", { body: { tipo: f.tipo, file: f.nome, foglio: f.foglio, colonne: f.colonne, righe: f.righe, numeri: f.numeri } });
+			const mw = f.confronto && f.confronto.modificheWeb;
+			const r = await api("carica", { body: { tipo: f.tipo, file: f.nome, foglio: f.foglio, colonne: f.colonne, righe: f.righe, numeri: f.numeri, modificheWebViste: mw ? mw.n : 0 } });
 			if (window.CertificatiDati) delete window.CertificatiDati[f.tipo];
+			if (f.tipo === "epa" && window.CertificatiModifica) window.CertificatiModifica.ricarica();
 			stato.file = null;
 			$("#cx-file").value = "";
 			$("#cx-drop-testo").innerHTML = "Trascina qui il file Excel oppure <u>sceglilo dal computer</u>";
