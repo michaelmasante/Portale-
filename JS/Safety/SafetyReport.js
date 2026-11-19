@@ -294,7 +294,20 @@
 			if (!t) { targetMancanti.add(indice + " " + nome); return null; }
 			return t.valore;
 		}
-		return { dati, perimetro, cfg, anno, mese, locs, gruppi, target, targetMancanti, avvisi };
+		// FY dell'anno prima: calcolato dai dati, oppure forzato in dbo.SafetyForzati
+		const forzatiUsati = new Set();
+		function fyPrec(nome, indice, locsFy) {
+			const calcolato = C.fy(dati, indice, locsFy, anno - 1).valore;
+			const f = (dati.forzati || []).find(x => x.anno === anno - 1 && x.indice === indice && x.nome.trim().toLowerCase() === String(nome).trim().toLowerCase());
+			if (!f) return calcolato;
+			const chiave = indice + " " + nome;
+			if (!forzatiUsati.has(chiave)) {
+				forzatiUsati.add(chiave);
+				avvisi.push(`${indice} ${anno - 1} di ${nome}: usato il valore forzato ${String(f.valore).replace(".", ",")} (dbo.SafetyForzati) invece di quello calcolato dai dati ${calcolato == null ? "—" : (Math.round(calcolato * 10000) / 10000).toString().replace(".", ",")}${f.nota ? " — " + f.nota : ""}.`);
+			}
+			return f.valore;
+		}
+		return { dati, perimetro, cfg, anno, mese, locs, gruppi, target, targetMancanti, avvisi, fyPrec };
 	}
 
 	function titoloMese(k) { return `${MESI_FULL[k.mese]} '${aa(k.anno)}`; }
@@ -351,7 +364,7 @@
 		pannelloPerimetro(els, k, testi.note);
 
 		const tgt = k.target(k.cfg.sigla, "IFI");
-		const prevFy = C.fy(k.dati, "IFI", all, a - 1).valore;
+		const prevFy = k.fyPrec(k.cfg.sigla, "IFI", all);
 		const ytd = [], r12 = [];
 		for (let i = 0; i < 12; i++) {
 			ytd.push(i <= m ? C.ytd(k.dati, "IFI", all, a, i).valore : null);
@@ -391,7 +404,7 @@
 		els.push(titolo(`Safety Review Performance – ${titoloMese(k)}`, "Injury Severity Index (ISI)", 0.537, 0.495, 8.8, 0.9, 20, 14));
 		pannelloPerimetro(els, k, testi.note);
 		const tgt = k.target(k.cfg.sigla, "ISI");
-		const prevFy = C.fy(k.dati, "ISI", all, a - 1).valore;
+		const prevFy = k.fyPrec(k.cfg.sigla, "ISI", all);
 		const ytd = [], r12 = [];
 		for (let i = 0; i < 12; i++) {
 			ytd.push(i <= m ? C.ytd(k.dati, "ISI", all, a, i).valore : null);
@@ -425,7 +438,7 @@
 		const mensIfi = MESI_UP.map((_, i) => i <= m ? C.mese1(k.dati, "IFI", all, a, i).valore : null);
 		const mensLti = C.mensili(k.dati, "LTI", a, all).map((v, i) => i <= m ? v : null);
 		const labels = [String(a - 1)].concat(MESI_UP, [`${a} YTD`, "12 MR", `Target '${aa(a)}`]);
-		const valori = [C.fy(k.dati, "IFI", C.location(k.dati, a - 1), a - 1).valore].concat(mensIfi, [ytd.valore, r12, tgt]);
+		const valori = [k.fyPrec(k.cfg.sigla, "IFI", C.location(k.dati, a - 1))].concat(mensIfi, [ytd.valore, r12, tgt]);
 		const colori = ["#94a3b8"].concat(MESI_UP.map((_, i) => i <= m ? "#0028ff" : "transparent"), ["#0028ff", "#60a5fa", "#16a34a"]);
 		els.push(I(0.4, 1.15, 12.4, 3.75, graficoTrend(12.4, 3.75, { labels, valori, colori, target: tgt })));
 
@@ -464,7 +477,7 @@
 		const passo = Math.min(0.912, (6.5 - 1.934) / gruppi.length);
 		gruppi.forEach((g, gi) => {
 			const tgt = k.target(g.nome, "IFI");
-			const fyPrev = C.fy(k.dati, "IFI", g.locs, a - 1).valore;
+			const fyPrev = k.fyPrec(g.nome, "IFI", g.locs);
 			const ytd = [], r12 = [];
 			for (let i = 0; i < 12; i++) {
 				ytd.push(i <= m ? C.ytd(k.dati, "IFI", g.locs, a, i).valore : null);

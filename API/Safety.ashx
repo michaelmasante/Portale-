@@ -228,6 +228,28 @@ public class SafetyHandler : IHttpHandler
 			}
 		}
 
+		// Valori forzati a mano (es. FY dell'anno prima sbagliato nel file): opzionale, solo se esiste la tabella
+		List<object> forzati = new List<object>();
+		using (SqlCommand cmd = new SqlCommand(
+			"IF OBJECT_ID(N'dbo.SafetyForzati', N'U') IS NOT NULL " +
+			"SELECT Nome, Indice, Anno, Valore, Nota FROM dbo.SafetyForzati WHERE Perimetro = @p", cn))
+		{
+			cmd.Parameters.Add("@p", SqlDbType.VarChar, 10).Value = perimetro;
+			using (SqlDataReader r = cmd.ExecuteReader())
+			{
+				while (r.Read())
+				{
+					Dictionary<string, object> x = new Dictionary<string, object>();
+					x["nome"] = r.GetString(0);
+					x["indice"] = r.GetString(1);
+					x["anno"] = (int)r.GetInt16(2);
+					x["valore"] = (double)r.GetDecimal(3);
+					x["nota"] = r.IsDBNull(4) ? null : r.GetString(4);
+					forzati.Add(x);
+				}
+			}
+		}
+
 		Dictionary<string, object> ultimo = null;
 		using (SqlCommand cmd = new SqlCommand(
 			"SELECT TOP 1 Data, Utente, NomeFile FROM dbo.SafetyCaricamenti " +
@@ -252,6 +274,7 @@ public class SafetyHandler : IHttpHandler
 		d["valori"] = valori;
 		d["gruppi"] = gruppi;
 		d["target"] = target;
+		d["forzati"] = forzati;
 		d["ultimo"] = ultimo;
 		d["puoCaricare"] = u.Ha(RuoloUpload);
 		Reply(ctx, d);
