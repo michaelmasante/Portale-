@@ -180,8 +180,9 @@
 
 	Promise.all([
 		loadFromDb("shoporder"),
-		loadFromDb("tag")
-	]).then(([shopData, tagData]) => {
+		loadFromDb("tag"),
+		loadFromDb("epa")
+	]).then(([shopData, tagData, epaData]) => {
 		const failed = [shopData, tagData].find(d => !d || d.ok === false);
 		if (failed) {
 			showEmptyDb("Dati non disponibili: " + (failed.message || "errore del server") + (failed.detail ? " — " + failed.detail : ""));
@@ -189,6 +190,8 @@
 			return;
 		}
 		window.CertificatiDati = { shoporder: shopData, tag: tagData };
+		// Il Tracker EPA serve solo per la tabellina delle settimane: se non c'è, la pagina funziona lo stesso
+		if (epaData && epaData.ok !== false) window.CertificatiDati.epa = epaData;
 
 		if (!shopData.righe || !shopData.righe.length) {
 			showEmptyDb("Nel database non ci sono ancora Shop Order: vanno caricati i file Excel.");
@@ -284,9 +287,13 @@
 		return `<div class="cert-tag-updated">Nessun TAG VUOTO trovato. File dei TAG aggiornato al "${escapeHtml(tagSheetName)}"</div>`;
 	}
 
-	function buildDetailPanel(tagMatches) {
+	function buildDetailPanel(tagMatches, rowData) {
 		const panel = document.createElement("div");
 		panel.className = "cert-detail-panel";
+		const settimane = window.CertificatiSettimane && rowData ? window.CertificatiSettimane.html(rowData) : "";
+		const affianca = html => settimane
+			? `<div class="cert-detail-affianca"><div class="cert-detail-mesi">${html}</div>${settimane}</div>`
+			: html;
 
 		const months = getTimelineMonths();
 		const monthHeaders = months.map(mo => `<th class="cert-month-col" title="${mo.title}">${mo.label}</th>`).join("");
@@ -296,7 +303,7 @@
 				`<td class="cert-month-col" title="${mo.title}"><div class="cert-month-bar cert-month-bar--ok"></div></td>`
 			).join("");
 
-			panel.innerHTML = `
+			panel.innerHTML = affianca(`
 				<table class="cert-detail-table">
 					<thead>
 						<tr>${monthHeaders}</tr>
@@ -306,7 +313,7 @@
 					</tbody>
 				</table>
 				${buildTagUpdatedNote()}
-			`;
+			`);
 			return panel;
 		}
 
@@ -325,7 +332,7 @@
 		`;
 		}).join("");
 
-		panel.innerHTML = `
+		panel.innerHTML = affianca(`
 			<table class="cert-detail-table">
 				<thead>
 					<tr><th>Tag</th><th>Inizio Deprecamento</th><th>Fine Deprecamento</th>${monthHeaders}</tr>
@@ -333,7 +340,7 @@
 				<tbody>${rowsHtml}</tbody>
 			</table>
 			${buildTagUpdatedNote()}
-		`;
+		`);
 		return panel;
 	}
 
@@ -416,7 +423,7 @@
 			rowFormatter: function (row) {
 				const el = row.getElement();
 				if (el.querySelector(".cert-detail-panel")) return;
-				const panel = buildDetailPanel(row.getData().__tagMatches);
+				const panel = buildDetailPanel(row.getData().__tagMatches, row.getData());
 				el.appendChild(panel);
 			},
 		});

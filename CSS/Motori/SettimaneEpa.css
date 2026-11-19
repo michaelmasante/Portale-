@@ -1,0 +1,70 @@
+.cert-detail-affianca {
+	display: flex;
+	align-items: flex-start;
+	gap: 24px;
+	flex-wrap: wrap;
+}
+
+.cert-detail-mesi {
+	min-width: 0;
+}
+
+.epa-sett-box {
+	background: #fff;
+	border: 1px solid #DCE3F0;
+	border-radius: 8px;
+	padding: 8px 10px;
+}
+
+.epa-sett-titolo {
+	font-size: 13px;
+	margin-bottom: 6px;
+	color: #3f4254;
+}
+
+.epa-sett-stato {
+	font-weight: 600;
+}
+
+.epa-sett-stato--approvata { color: #2e9e4f; }
+.epa-sett-stato--submitted { color: #1d4ed8; }
+.epa-sett-stato--pending { color: #3b82f6; }
+.epa-sett-stato--niente,
+.epa-sett-stato--ritardo { color: #ce201b; }
+.epa-sett-stato--na { color: #7E8299; }
+
+.epa-sett-table th.cert-month-col,
+.epa-sett-table td.cert-month-col {
+	min-width: 26px;
+	padding: 4px 2px;
+}
+
+.epa-sett-table th.epa-sett-oggi,
+.epa-sett-table td.epa-sett-oggi {
+	background: #FFF4DE;
+}
+
+.epa-sett-table th.epa-sett-oggi {
+	color: #8A5A00;
+	font-weight: 700;
+	line-height: 1.1;
+}
+
+.epa-sett-ora {
+	display: block;
+	font-size: 9px;
+	font-weight: 600;
+	text-transform: uppercase;
+}
+
+.epa-sett-bar--blu { background-color: #1d4ed8; }
+.epa-sett-bar--pending { background-color: #60a5fa; }
+.epa-sett-bar--rosso { background-color: #ce201b; }
+.epa-sett-bar--ok { background-color: #2e9e4f; }
+.epa-sett-bar--na { background-color: #C9CCDA; }
+
+.epa-sett-nota {
+	margin-top: 4px;
+	font-size: 11px;
+	color: #7E8299;
+}
