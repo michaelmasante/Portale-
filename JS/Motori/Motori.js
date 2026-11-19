@@ -153,7 +153,7 @@
 	const API_CERTIFICATI = "API/Certificati.ashx";
 
 	function loadFromDb(action) {
-		return nextPaint.then(() => fetch(API_CERTIFICATI + "?action=" + action, { credentials: "same-origin", cache: "no-store" }))
+		return nextPaint.then(() => fetch(API_CERTIFICATI + "?action=" + action + ((window.CertificatiAnno || {}).q || ""), { credentials: "same-origin", cache: "no-store" }))
 			.then(res => res.json().catch(() => ({ ok: false, message: `Risposta non valida dal server (HTTP ${res.status}).` })))
 			.catch(() => ({ ok: false, message: "Il server non risponde (" + API_CERTIFICATI + ")." }));
 	}
@@ -165,9 +165,11 @@
 	}
 
 	function showEmptyDb(message) {
+		const passato = window.CertificatiAnno && window.CertificatiAnno.anno;
 		gridsWrapper.innerHTML = `<div class="cert-vuoto">${escapeHtml(message)}
-			<button type="button" class="cx-btn cx-btn-primary" id="cert-vai-carica">Vai a Carica Excel</button></div>`;
+			${passato ? "" : `<button type="button" class="cx-btn cx-btn-primary" id="cert-vai-carica">Vai a Carica Excel</button>`}</div>`;
 		const btn = document.getElementById("cert-vai-carica");
+		if (!btn) return;
 		btn.onclick = () => {
 			const filters = document.querySelector(".filters-container");
 			if (filters) filters.style.display = "none";
@@ -446,7 +448,7 @@
 		[{ id: "pn", label: "Per PN Motore" }, { id: "tag", label: "Per Tag" }, { id: "month", label: "Per Mese" },
 			{ id: "epa", label: "Tracker EPA" }, { id: "carb", label: "Tracker CARB" },
 			{ id: "modifica", label: "Modifica Tracker", ruoli: "Certificati Modifica" },
-			{ id: "carica", label: "Carica Excel", ruoli: "Certificati Upload" }].forEach(t => {
+			{ id: "carica", label: "Carica Excel", ruoli: "Certificati Upload" }].filter(t => !(window.CertificatiAnno && window.CertificatiAnno.anno && (t.id === "modifica" || t.id === "carica"))).forEach(t => {
 			const btn = document.createElement("button");
 			btn.type = "button";
 			btn.className = "tab-btn" + (t.id === activeView ? " active" : "");

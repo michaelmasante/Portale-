@@ -23,6 +23,10 @@ public class CertificatiHandler : IHttpHandler
 	private static readonly string[] RuoliAccesso = { "Certificati", RuoloUpload, RuoloModifica, Admin };
 	private const int MaxBodyChars = 100 * 1024 * 1024;
 	private const int MaxRighe = 500000;
+	// Fotografia di fine anno: la prima è quella del 2026 (presa al primo accesso del 2027)
+	private const int PrimoAnnoFoto = 2026;
+	private static int fotoFatta = 0;
+	private static readonly object fotoLock = new object();
 	private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
 
 	private class Col
@@ -134,9 +138,24 @@ public class CertificatiHandler : IHttpHandler
 			string action = (req.QueryString["action"] ?? "").Trim().ToLowerInvariant();
 			Utente u = CaricaUtente(context);
 
-			if (action == "shoporder") { ShopOrder(context); return; }
-			if (action == "tag") { Tag(context); return; }
-			if (action == "epa") { Epa(context); return; }
+			int? anno = null;
+			string sa = req.QueryString["anno"];
+			if (!string.IsNullOrEmpty(sa))
+			{
+				int a;
+				if (!int.TryParse(sa, NumberStyles.None, Inv, out a) || a < PrimoAnnoFoto || a >= DateTime.Today.Year) throw new UserException("Anno non valido.");
+				anno = a;
+			}
+
+			// Prima di leggere o scrivere: se è cominciato un anno nuovo, si fotografano i dati al 31/12
+			bool scrive = action == "carica" || action == "salvaepa";
+			try { FotografiaFineAnno(); }
+			catch (Exception ex) { if (scrive) throw new UserException("Non riesco a salvare la fotografia di fine anno, per sicurezza non cambio niente: " + ex.Message); }
+
+			if (action == "anni") { Anni(context); return; }
+			if (action == "shoporder") { ShopOrder(context, anno); return; }
+			if (action == "tag") { Tag(context, anno); return; }
+			if (action == "epa") { Epa(context, anno); return; }
 			if (action == "caricamenti") { Caricamenti(context); return; }
 			if (action == "carica")
 			{
@@ -213,7 +232,7 @@ public class CertificatiHandler : IHttpHandler
 		return u;
 	}
 
-	private static void ShopOrder(HttpContext ctx)
+	private static void ShopOrder(HttpContext ctx, int? anno)
 	{
 		List<string> colonne = new List<string>();
 		StringBuilder sql = new StringBuilder("SELECT ");
@@ -222,37 +241,37 @@ public class CertificatiHandler : IHttpHandler
 			colonne.Add(ShopCols[i].Excel);
 			sql.Append(i == 0 ? "" : ", ").Append(ShopCols[i].Q);
 		}
-		sql.Append(" FROM dbo.ShopOrder ORDER BY ").Append(ShopCols[0].Q);
+		sql.Append(Da("ShopOrder", anno)).Append(" ORDER BY ").Append(ShopCols[0].Q);
 
 		Dictionary<string, object> d = new Dictionary<string, object>();
 		d["ok"] = true;
 		d["colonne"] = colonne;
 		using (SqlConnection cn = Open(ShopConnection))
 		{
+			d["ultimo"] = anno.HasValue ? UltimoFoto(cn, anno.Value) : UltimoCaricamento(cn);
 			d["righe"] = LeggiRighe(cn, sql.ToString(), ShopCols.Length);
-			d["ultimo"] = UltimoCaricamento(cn);
 		}
 		Reply(ctx, d);
 	}
 
-	private static void Tag(HttpContext ctx)
+	private static void Tag(HttpContext ctx, int? anno)
 	{
 		Dictionary<string, object> d = new Dictionary<string, object>();
 		d["ok"] = true;
 		d["colonne"] = TagLette;
 		using (SqlConnection cn = Open(TagConnection))
 		{
+			Dictionary<string, object> ultimo = anno.HasValue ? UltimoFoto(cn, anno.Value) : UltimoCaricamento(cn);
 			d["righe"] = LeggiRighe(cn,
-				"SELECT [Element], [VStart], [VEnd], [TagElementDescription] FROM dbo.TAG ORDER BY [Element], [VStart], [TagElementDescription]",
+				"SELECT [Element], [VStart], [VEnd], [TagElementDescription]" + Da("TAG", anno) + " ORDER BY [Element], [VStart], [TagElementDescription]",
 				TagLette.Length);
-			Dictionary<string, object> ultimo = UltimoCaricamento(cn);
 			d["ultimo"] = ultimo;
-			d["foglio"] = ultimo == null ? "" : ultimo["foglio"];
+			d["foglio"] = ultimo == null || !ultimo.ContainsKey("foglio") ? "" : ultimo["foglio"];
 		}
 		Reply(ctx, d);
 	}
 
-	private static void Epa(HttpContext ctx)
+	private static void Epa(HttpContext ctx, int? anno)
 	{
 		List<string> colonne = new List<string>();
 		StringBuilder sql = new StringBuilder("SELECT ");
@@ -261,17 +280,139 @@ public class CertificatiHandler : IHttpHandler
 			colonne.Add(EpaCols[i].Excel);
 			sql.Append(i == 0 ? "" : ", ").Append(EpaCols[i].Q);
 		}
-		sql.Append(" FROM dbo.EpaFamiglie ORDER BY TRY_CAST(Ordine AS INT), Famiglia");
+		sql.Append(Da("EpaFamiglie", anno)).Append(" ORDER BY TRY_CAST(Ordine AS INT), Famiglia");
 
 		Dictionary<string, object> d = new Dictionary<string, object>();
 		d["ok"] = true;
 		d["colonne"] = colonne;
 		using (SqlConnection cn = Open(EpaConnection))
 		{
+			d["ultimo"] = anno.HasValue ? UltimoFoto(cn, anno.Value) : UltimoCaricamento(cn);
 			d["righe"] = LeggiRighe(cn, sql.ToString(), EpaCols.Length);
-			d["ultimo"] = UltimoCaricamento(cn);
-			d["modificheWeb"] = ModificheWeb(cn, null);
+			if (!anno.HasValue) d["modificheWeb"] = ModificheWeb(cn, null);
 		}
+		Reply(ctx, d);
+	}
+
+	// FROM della tabella di oggi o della sua fotografia di fine anno (anno già controllato: è un intero)
+	private static string Da(string tabella, int? anno)
+	{
+		return anno.HasValue
+			? " FROM dbo.[" + tabella + "Storico] WHERE Anno = " + anno.Value.ToString(Inv)
+			: " FROM dbo.[" + tabella + "]";
+	}
+
+	private class Foto
+	{
+		public string Connessione, Tabella;
+		public Col[] Cols;
+		public Foto(string connessione, string tabella, Col[] cols) { Connessione = connessione; Tabella = tabella; Cols = cols; }
+	}
+
+	private static Foto[] Fotografie()
+	{
+		return new Foto[] { new Foto(ShopConnection, "ShopOrder", ShopCols), new Foto(TagConnection, "TAG", TagCols), new Foto(EpaConnection, "EpaFamiglie", EpaCols) };
+	}
+
+	private static bool Esiste(SqlConnection cn, SqlTransaction tx, string tabella)
+	{
+		using (SqlCommand cmd = new SqlCommand("SELECT CASE WHEN OBJECT_ID(@t, N'U') IS NULL THEN 0 ELSE 1 END", cn, tx))
+		{
+			cmd.Parameters.Add("@t", SqlDbType.NVarChar, 300).Value = "dbo." + tabella;
+			return (int)cmd.ExecuteScalar() == 1;
+		}
+	}
+
+	// Al primo accesso di un anno nuovo copia ShopOrder, TAG e Tracker nelle tabelle ...Storico con l'anno appena finito.
+	// Tutte le scritture passano da qui prima, quindi la copia è lo stato al 31/12.
+	private static void FotografiaFineAnno()
+	{
+		int anno = DateTime.Today.Year - 1;
+		if (anno < PrimoAnnoFoto || fotoFatta == anno) return;
+		lock (fotoLock)
+		{
+			if (fotoFatta == anno) return;
+			bool tutte = true;
+			foreach (Foto f in Fotografie())
+			{
+				using (SqlConnection cn = Open(f.Connessione))
+				{
+					if (!Esiste(cn, null, "Fotografie") || !Esiste(cn, null, f.Tabella + "Storico")) { tutte = false; continue; }
+					string ultimo = null;
+					Dictionary<string, object> u = UltimoCaricamento(cn);
+					if (u != null) ultimo = new JavaScriptSerializer().Serialize(u);
+
+					using (SqlTransaction tx = cn.BeginTransaction())
+					{
+						using (SqlCommand cmd = new SqlCommand("SELECT COUNT(*) FROM dbo.Fotografie WITH (UPDLOCK, HOLDLOCK) WHERE Anno = @a", cn, tx))
+						{
+							cmd.Parameters.Add("@a", SqlDbType.SmallInt).Value = anno;
+							if ((int)cmd.ExecuteScalar() > 0) { tx.Commit(); continue; }
+						}
+						StringBuilder colonne = new StringBuilder();
+						foreach (Col c in f.Cols) colonne.Append(", ").Append(c.Q);
+						int righe;
+						using (SqlCommand cmd = new SqlCommand(
+							"DELETE FROM dbo.[" + f.Tabella + "Storico] WHERE Anno = @a; " +
+							"INSERT INTO dbo.[" + f.Tabella + "Storico] (Anno" + colonne + ") SELECT @a" + colonne + " FROM dbo.[" + f.Tabella + "];", cn, tx))
+						{
+							cmd.CommandTimeout = 600;
+							cmd.Parameters.Add("@a", SqlDbType.SmallInt).Value = anno;
+							righe = cmd.ExecuteNonQuery();
+						}
+						using (SqlCommand cmd = new SqlCommand("INSERT INTO dbo.Fotografie (Anno, Righe, Ultimo) VALUES (@a, @r, @u)", cn, tx))
+						{
+							cmd.Parameters.Add("@a", SqlDbType.SmallInt).Value = anno;
+							cmd.Parameters.Add("@r", SqlDbType.Int).Value = righe;
+							cmd.Parameters.Add("@u", SqlDbType.NVarChar, -1).Value = (object)ultimo ?? DBNull.Value;
+							cmd.ExecuteNonQuery();
+						}
+						tx.Commit();
+					}
+				}
+			}
+			if (tutte) fotoFatta = anno;
+		}
+	}
+
+	private static Dictionary<string, object> UltimoFoto(SqlConnection cn, int anno)
+	{
+		if (!Esiste(cn, null, "Fotografie")) throw new UserException("Le fotografie di fine anno non sono ancora attive: eseguire SQL/Certificati_03_fotografie.sql in SSMS.");
+		using (SqlCommand cmd = new SqlCommand("SELECT DataOra, Ultimo FROM dbo.Fotografie WHERE Anno = @a", cn))
+		{
+			cmd.Parameters.Add("@a", SqlDbType.SmallInt).Value = anno;
+			using (SqlDataReader r = cmd.ExecuteReader())
+			{
+				if (!r.Read()) throw new UserException("Non c'è la fotografia del " + anno.ToString(Inv) + " nel database " + cn.Database + ".");
+				Dictionary<string, object> u = r.IsDBNull(1) ? new Dictionary<string, object>()
+					: (new JavaScriptSerializer().DeserializeObject(r.GetString(1)) as Dictionary<string, object>) ?? new Dictionary<string, object>();
+				u["fotografia"] = anno;
+				u["fotografataIl"] = r.GetDateTime(0).ToString("yyyy-MM-dd HH:mm", Inv);
+				return u;
+			}
+		}
+	}
+
+	// Anni con la fotografia in tutti e tre i database
+	private static void Anni(HttpContext ctx)
+	{
+		List<int> anni = null;
+		foreach (Foto f in Fotografie())
+		{
+			List<int> l = new List<int>();
+			using (SqlConnection cn = Open(f.Connessione))
+			{
+				if (Esiste(cn, null, "Fotografie"))
+					using (SqlCommand cmd = new SqlCommand("SELECT Anno FROM dbo.Fotografie ORDER BY Anno DESC", cn))
+					using (SqlDataReader r = cmd.ExecuteReader())
+						while (r.Read()) l.Add(r.GetInt16(0));
+			}
+			anni = anni == null ? l : anni.FindAll(l.Contains);
+		}
+		Dictionary<string, object> d = new Dictionary<string, object>();
+		d["ok"] = true;
+		d["anni"] = anni ?? new List<int>();
+		d["primoAnno"] = PrimoAnnoFoto;
 		Reply(ctx, d);
 	}
 

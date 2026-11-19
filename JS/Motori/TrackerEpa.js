@@ -99,7 +99,7 @@
 	async function api(azione) {
 		let json;
 		try {
-			const res = await fetch(API + "?action=" + azione, { credentials: "same-origin", cache: "no-store" });
+			const res = await fetch(API + "?action=" + azione + ((window.CertificatiAnno || {}).q || ""), { credentials: "same-origin", cache: "no-store" });
 			json = await res.json();
 		} catch (e) {
 			throw new Error("Il server non risponde (" + API + ").");
@@ -138,7 +138,8 @@
 		try {
 			const [epa, shop] = await Promise.all([api("epa"), datiPortale("shoporder")]);
 			st.ultimo = epa.ultimo || null;
-			const oggi = new Date();
+			const annoFoto = (window.CertificatiAnno || {}).anno;
+			const oggi = annoFoto ? new Date(annoFoto, 11, 31) : new Date();
 			st.oggi = settimanaIso(oggi);
 			const dataFile = st.ultimo && st.ultimo.data ? new Date(String(st.ultimo.data).slice(0, 10)) : oggi;
 			st.annoBase = isNaN(dataFile) ? oggi.getFullYear() : dataFile.getFullYear();
@@ -273,7 +274,7 @@
 			<div class="epa-testa">
 				<div>
 					<h2 class="epa-titolo">Tracker ${st.aut}</h2>
-					<div class="cx-muted epa-sotto">${u ? `${esc(u.foglio || u.file || "")} · caricato il ${esc(String(u.data || "").slice(0, 10).split("-").reverse().join("/"))}${u.utente ? " da " + esc(u.utente) : ""}` : ""} · oggi CW${String(st.oggi.sett).padStart(2, "0")}/${st.oggi.anno}</div>
+					<div class="cx-muted epa-sotto">${u ? `${esc(u.foglio || u.file || "")} · caricato il ${esc(String(u.data || "").slice(0, 10).split("-").reverse().join("/"))}${u.utente ? " da " + esc(u.utente) : ""}` : ""} · ${(window.CertificatiAnno || {}).anno ? `fotografia al 31/12/${window.CertificatiAnno.anno} (CW${String(st.oggi.sett).padStart(2, "0")}/${st.oggi.anno})` : `oggi CW${String(st.oggi.sett).padStart(2, "0")}/${st.oggi.anno}`}</div>
 					${filtriTesto ? `<div class="epa-filtri-pagina">Filtrato per ${esc(filtriTesto)}: si contano solo i P/N che li rispettano.</div>` : ""}
 				</div>
 				<div class="epa-viste" role="group">
