@@ -3,8 +3,7 @@
 	const HOME = "Portale.html";
 
 	const message = document.getElementById("login-message");
-	const tabs = [...document.querySelectorAll(".login-tab")];
-	const forms = { login: document.getElementById("form-login"), register: document.getElementById("form-register") };
+	const forms = { login: document.getElementById("form-login") };
 
 	function safeTarget(url) {
 		if (!url || url.length > 500 || /[\x00-\x1f\\]/.test(url)) return HOME;
@@ -15,6 +14,12 @@
 		return url;
 	}
 	const target = safeTarget(new URLSearchParams(window.location.search).get("ReturnUrl"));
+
+	// Accesso con Microsoft: si torna alla pagina richiesta
+	const ms = document.getElementById("login-microsoft");
+	if (ms) ms.href = "API/Entra.ashx?ReturnUrl=" + encodeURIComponent(target);
+	const admin = document.getElementById("login-admin");
+	if (admin) admin.addEventListener("toggle", () => { if (admin.open) document.getElementById("login-username").focus(); });
 
 	function showMessage(text, kind) {
 		message.textContent = text;
@@ -30,28 +35,6 @@
 		inputs.forEach(i => i.classList.add("is-invalid"));
 		if (inputs[0]) inputs[0].focus();
 	}
-
-	function showForm(name, focus) {
-		tabs.forEach(t => {
-			const on = t.dataset.form === name;
-			t.classList.toggle("active", on);
-			t.setAttribute("aria-selected", on ? "true" : "false");
-			t.tabIndex = on ? 0 : -1;
-		});
-		Object.keys(forms).forEach(k => { forms[k].hidden = k !== name; });
-		document.querySelectorAll(".login-form input").forEach(i => i.classList.remove("is-invalid"));
-		if (focus !== false) forms[name].querySelector("input").focus();
-	}
-	tabs.forEach((t, i) => {
-		t.addEventListener("click", () => { clearMessage(); showForm(t.dataset.form); });
-		t.addEventListener("keydown", e => {
-			if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
-			const next = tabs[(i + (e.key === "ArrowRight" ? 1 : tabs.length - 1)) % tabs.length];
-			clearMessage();
-			showForm(next.dataset.form, false);
-			next.focus();
-		});
-	});
 
 	document.querySelectorAll(".login-eye").forEach(btn => {
 		btn.addEventListener("click", () => {
@@ -101,43 +84,11 @@
 		});
 	});
 
-	forms.register.addEventListener("submit", e => {
-		e.preventDefault();
-		clearMessage();
-		const nome = document.getElementById("reg-nome");
-		const user = document.getElementById("reg-username");
-		const mail = document.getElementById("reg-email");
-		const pass = document.getElementById("reg-password");
-		const pass2 = document.getElementById("reg-password2");
-
-		if (nome.value.trim().length < 2) { showMessage("Scrivi nome e cognome.", "error"); return markInvalid(nome); }
-		if (!/^[A-Za-z0-9._@-]{3,50}$/.test(user.value.trim())) {
-			showMessage("Il nome utente deve avere da 3 a 50 caratteri: lettere, numeri, punto, trattino, trattino basso o @.", "error");
-			return markInvalid(user);
-		}
-		if (mail.value.trim() && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(mail.value.trim())) {
-			showMessage("L'indirizzo email non è valido.", "error");
-			return markInvalid(mail);
-		}
-		if (pass.value.length < 8) { showMessage("La password deve avere almeno 8 caratteri.", "error"); return markInvalid(pass); }
-		if (pass.value !== pass2.value) { showMessage("Le due password non sono uguali.", "error"); return markInvalid(pass2); }
-
-		busy(forms.register, true);
-		post("register", { nome: nome.value.trim(), username: user.value.trim(), email: mail.value.trim(), password: pass.value }).then(d => {
-			busy(forms.register, false);
-			if (!d.ok) {
-				showMessage(d.message || "Registrazione non riuscita.", "error");
-				return;
-			}
-			const name = user.value.trim();
-			forms.register.reset();
-			showForm("login", false);
-			document.getElementById("login-username").value = name;
-			document.getElementById("login-password").value = "";
-			showMessage(d.message || "Registrazione completata.", "ok");
-			document.getElementById("login-password").focus();
-		});
-	});
+	const qs = new URLSearchParams(window.location.search);
+	if (qs.get("entra")) {
+		const msg = (qs.get("msg") || "Accesso con Microsoft non riuscito.").slice(0, 300);
+		showMessage(msg, qs.get("entra") === "attesa" ? "ok" : "error");
+	}
 
 	fetch(API + "?action=me", { credentials: "same-origin", cache: "no-store" })
 		.then(res => res.json())

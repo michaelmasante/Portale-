@@ -63,7 +63,7 @@ public class AuthHandler : IHttpHandler
 			if (req.HttpMethod != "POST" || req.Headers["X-Portale"] != "1") throw new UserException(BadRequest);
 
 			if (action == "login") Login(context);
-			else if (action == "register") Register(context);
+			else if (action == "register") throw new UserException("La registrazione si fa entrando con \u00ABAccedi con Microsoft\u00BB: poi un amministratore attiva l'account.");
 			else if (action == "logout") Logout(context);
 			else throw new UserException(BadRequest);
 		}
@@ -170,6 +170,20 @@ public class AuthHandler : IHttpHandler
 			{
 				WriteLog(cn, id, name, "NonAttivo", ip, "Password giusta ma account non attivato", false);
 				throw new UserException("Il tuo account non \u00E8 ancora stato attivato. Chiedi all'amministratore di attivarlo.");
+			}
+
+			// Con utente e password entra solo l'amministratore: tutti gli altri con Microsoft Entra ID
+			bool admin;
+			using (SqlCommand cmd = new SqlCommand(
+				"SELECT COUNT(*) FROM dbo.UtentiRuoli ur JOIN dbo.Ruoli r ON r.Id = ur.RuoloId WHERE ur.UserId = @id AND r.Nome = N'Admin'", cn))
+			{
+				cmd.Parameters.Add("@id", SqlDbType.Int).Value = id;
+				admin = (int)cmd.ExecuteScalar() > 0;
+			}
+			if (!admin)
+			{
+				WriteLog(cn, id, name, "LoginNegato", ip, "Password giusta ma non Admin: deve usare Microsoft", false);
+				throw new UserException("Con utente e password entra solo l'amministratore. Usa \u00ABAccedi con Microsoft\u00BB.");
 			}
 
 			using (SqlCommand cmd = new SqlCommand(

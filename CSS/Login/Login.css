@@ -231,3 +231,49 @@ body {
 		padding: 24px 20px;
 	}
 }
+
+/* Accesso con Microsoft Entra ID */
+.login-microsoft {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 12px;
+	margin-top: 8px;
+	padding: 12px 16px;
+	font-weight: 600;
+	color: #fff;
+	background: #2F2F2F;
+	border-radius: 8px;
+	text-decoration: none;
+}
+
+	.login-microsoft:hover {
+		background: #000;
+	}
+
+	.login-microsoft:focus-visible {
+		outline: 2px solid var(--primary);
+		outline-offset: 2px;
+	}
+
+.login-microsoft-nota {
+	display: block;
+	margin-top: 8px;
+	text-align: center;
+}
+
+.login-admin {
+	margin-top: 26px;
+	border-top: 1px solid var(--border);
+	padding-top: 14px;
+}
+
+	.login-admin summary {
+		cursor: pointer;
+		color: var(--text-muted);
+		font-size: .88rem;
+	}
+
+		.login-admin summary:hover {
+			color: var(--text);
+		}
